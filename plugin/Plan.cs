@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using HarmonyLib;
@@ -28,19 +29,74 @@ namespace CorticoSisterDrive
             public string Source;
         }
 
-        /// <summary>Appended to every driving-stage prompt (numeric and lever formats).</summary>
-        internal const string PromptSection = @"
+        /// <summary>
+        /// Rewrites a driving-stage prompt so plans are part of its own output rules: the
+        /// "all items required" rule allows plan instead of the action items, and the plan rules
+        /// plus examples in the stage's own example style go right before its examples.
+        /// </summary>
+        internal static string Extend(string prompt)
+        {
+            bool lever = prompt.Contains("horizontal_action");
+            if (lever)
+            {
+                // The lever menu goes away; every example's action pair becomes the equivalent one-step plan.
+                int menu = prompt.IndexOf("##Selectable actions", StringComparison.Ordinal);
+                int rule = prompt.IndexOf("##Response Rule", StringComparison.Ordinal);
+                if (menu >= 0 && rule > menu) prompt = prompt.Remove(menu, rule - menu);
+                prompt = prompt.Replace("-选择一个horizontal_action和一个vertical_action", "-按 #计划动作 输出 plan");
+                prompt = LeverTemplateRx.Replace(prompt, PlanTemplate);
+                prompt = LeverExampleRx.Replace(prompt, m => $"plan: [{{speed: {LeverSpeed(m.Groups[2].Value)}, steer: {LeverSteer(m.Groups[1].Value)}, until: none}}]");
+            }
+            else
+            {
+                prompt = prompt.Replace("actions、sister、brother 三项都必须存在", "plan、sister、brother 三项都必须存在");
+                prompt = prompt.Replace("-actions 的格式和数值照上面的规则不变", "-plan 的格式和数值照上面的规则不变");
+                prompt = ActionsFieldsRx.Replace(prompt, "##plan\n- plan 为列表，每步包含 speed（刻度即下面的 target_speed）、steer（刻度即下面的 steering_angle）、until（见 #计划动作；原来的 duration N 写成 until: seconds N）\n");
+                prompt = NumericTemplateRx.Replace(prompt, PlanTemplate);
+                prompt = NumericExampleRx.Replace(prompt, m => "plan: [" + string.Join(", ", NumericStepRx.Matches(m.Groups[1].Value).Cast<Match>().Select(s =>
+                    $"{{speed: {s.Groups[1].Value.Trim()}, steer: {s.Groups[2].Value.Trim()}, until: {(s.Groups[3].Value.Trim() == "none" ? "none" : "seconds " + s.Groups[3].Value.Trim())}}}")) + "]");
+            }
+            string section = PromptSection + (lever ? LeverExamples : NumericExamples) + "\n\n";
+            int at = prompt.IndexOf("\n#Example", StringComparison.Ordinal);
+            return at >= 0 ? prompt.Insert(at + 1, section.TrimStart('\r', '\n')) : prompt + section;
+        }
 
-#计划动作（哥哥一次交代好几步时使用）
-- 哥哥常常一次说一串要按位置或时机去做的事，例如「往前开，开十米左右往右打，车头摆正就回正」「倒车两米再停」。这时不要输出原来的动作项，改为输出 plan：一步一个动作，每步写清做到什么时候进入下一步。只有一个立刻要做的动作时，照原来的格式输出即可。
+        private const string PlanTemplate = "plan: [{speed: 速度|none, steer: 方向|none, until: 条件}, ...]";
+        private static readonly Regex LeverTemplateRx = new Regex(@"horizontal_action:\s*<horizontal_action>\s*vertical_action:\s*<vertical_action>");
+        private static readonly Regex LeverExampleRx = new Regex(@"horizontal_action:\s*(\w+)\s+vertical_action:\s*(\w+)");
+        private static readonly Regex NumericTemplateRx = new Regex(@"actions\s*:\s*\[\s*\{\s*target_speed\s*:\s*target_speed[^\]]*\]");
+        private static readonly Regex ActionsFieldsRx = new Regex(@"##actions\r?\n(?:-[^\n]*\n)+");
+        private static readonly Regex NumericExampleRx = new Regex(@"actions\s*:\s*\[(.*?)\]", RegexOptions.Singleline);
+        private static readonly Regex NumericStepRx = new Regex(@"target_speed\s*:\s*([^,}]+),\s*steering_angle\s*:\s*([^,}]+),\s*duration\s*:\s*([^,}]+)");
+
+        private static string LeverSteer(string a) => a switch { "left" => "-0.6", "right" => "0.6", "center" => "0", _ => "none" };
+        private static string LeverSpeed(string a) => a switch { "go_forward" => "15", "brake" => "0", "go_back" => "-5", _ => "none" };
+
+        private const string LeverExamples = @"
+##plan 示例
+哥哥: 慢慢往前开，开五米就停。(音频文件)
+plan: [{speed: 10, steer: 0, until: distance 5}, {speed: 0, steer: none, until: none}] response: 好嘞，开五米就停~ brother: 慢慢往前开，开五米就停。
+哥哥: 往前开，到弯道口方向盘往右打，车头摆正就回正。(音频文件)
+plan: [{speed: 10, steer: 0, until: distance 8}, {speed: none, steer: 0.6, until: turned 70}, {speed: none, steer: 0, until: none}] response: 记住啦，到弯口再打方向~ brother: 往前开，到弯道口方向盘往右打，车头摆正就回正。";
+
+        private const string NumericExamples = @"
+##plan 示例
+-input: {user}'s voice data: 慢慢往前开，开五米就停。
+-output: plan: [{speed: 10, steer: 0, until: distance 5}, {speed: 0, steer: none, until: none}] sister: 好嘞，开五米就停~ brother: 慢慢往前开，开五米就停。
+-input: {user}'s voice data: 倒车，倒两米然后停住。
+-output: plan: [{speed: -5, steer: 0, until: distance 2}, {speed: 0, steer: none, until: none}] sister: 倒两米是吧，看我的！ brother: 倒车，倒两米然后停住。";
+
+        private const string PromptSection = @"
+
+#计划动作（驾驶操作一律用 plan 输出）
+- 哥哥常常一次说一串要按位置或时机去做的事，例如「往前开，开十米左右往右打，车头摆正就回正」「倒车两米再停」。用 plan 把它拆开：一步一个动作，每步写清做到什么时候进入下一步。只有一个立刻要做的动作时，plan 里写一步，until: none。
 - 格式：plan: [{speed: 速度|none, steer: 方向|none, until: 条件}, ...]
   - speed：目标速度，单位 km/h。1~30 前进，0 刹车，-1~-15 倒车，none 保持当前速度。
   - steer：方向盘比例，-1~1。负数向左，正数向右，0 回正，none 保持当前方向。
   - until：这一步做到什么时候。只能用以下几种：seconds N（N 秒后）、distance N（这一步开出 N 米后）、turned N（这一步车头转过 N 度后）、stopped（车停稳后）、goal N（离目标车位不到 N 米后）、none（一直保持，等哥哥下一句）。
 - 最后一步通常是 until: none。
-- 用 plan 时，妹妹的回话和转写这两项仍按原格式输出。
-- 例：哥哥说「往前慢慢开，开十米左右往右打，车头摆正就回正」→ plan: [{speed: 10, steer: 0, until: distance 10}, {speed: none, steer: 0.6, until: turned 80}, {speed: none, steer: 0, until: none}]
-- 例：哥哥说「倒车两米再停」→ plan: [{speed: -5, steer: 0, until: distance 2}, {speed: 0, steer: none, until: none}]";
+- 妹妹的回话和转写这两项仍按原格式输出。
+";
 
         private static readonly Regex PlanRx = new Regex(@"plan\s*:\s*\[(.*)\]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
         private static readonly Regex StepRx = new Regex(@"\{([^}]*)\}", RegexOptions.Singleline);
@@ -211,7 +267,7 @@ namespace CorticoSisterDrive
         {
             if (string.IsNullOrEmpty(__result)) return;
             if (__result.Contains("target_speed") || __result.Contains("horizontal_action"))
-                __result += Plan.PromptSection;
+                __result = Plan.Extend(__result);
         }
     }
 }
