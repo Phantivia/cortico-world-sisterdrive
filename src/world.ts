@@ -17,7 +17,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const RAW_REPLY_MAX_CHARS = 400;
 /** 实时画面每次唤醒都会进上下文，尺寸比事件截图小。 */
 const LIVE_VIEW_SIZE = { width: 512, topWidth: 384 };
-const MINE_CHAIN_MS = 3000;
+const CHAIN_MS = 3000;
+const CHAIN_EVENTS = new Set(['mine', 'collision']);
 
 /** cfg.attachImages 打开时附截图的事件。 */
 const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'mine', 'collision', 'stageEnd']);
@@ -148,7 +149,7 @@ export class SisterDriveWorld implements World {
   private live: { blobs: BlobInput[]; state: GameState | undefined; note: string; atMs: number } | null = null;
   private liveDeliveredAtMs = 0;
   private liveQueued = false;
-  private lastMineAtMs = 0;
+  private readonly lastChainAtMs = new Map<string, number>();
   /** 上一句 sisterdrive_say 被游戏收下的时刻；场景载入时重置。 */
   private lastSayAtMs = Date.now();
   private idleWokenAtMs = 0;
@@ -229,14 +230,15 @@ export class SisterDriveWorld implements World {
     }
     const text = renderEvent(f);
     if (!text || !f.type) return;
-    const blobs = this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
-    let trigger = TRIGGER[f.type] ?? 'debounce';
-    if (f.type === 'mine') {
-      // 连环爆炸只让第一声打断在途轮次，其余照常记录、随下一次唤醒送达。
-      if (Date.now() - this.lastMineAtMs < MINE_CHAIN_MS) trigger = 'piggyback';
-      this.lastMineAtMs = Date.now();
+    // 连环爆炸、连着蹭锥桶：只有第一下唤醒并附截图，其余照常记录、随下一次唤醒送达。
+    let chained = false;
+    if (CHAIN_EVENTS.has(f.type)) {
+      const now = Date.now();
+      chained = now - (this.lastChainAtMs.get(f.type) ?? 0) < CHAIN_MS;
+      this.lastChainAtMs.set(f.type, now);
     }
-    await this.push(f.type, text, trigger, false, blobs);
+    const blobs = !chained && this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
+    await this.push(f.type, text, chained ? 'piggyback' : TRIGGER[f.type] ?? 'debounce', false, blobs);
   }
 
   private async capture(): Promise<BlobInput[] | undefined> {
