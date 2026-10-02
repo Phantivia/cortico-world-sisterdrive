@@ -15,7 +15,7 @@ export interface SisterDriveConfigSection {
   ttsInferenceTimesteps: number;
   /** 截图的最大宽度，像素。 */
   captureWidth: number;
-  /** 场景载入、情境区、画面提示、违规倒计时、关卡结束五类事件是否附带当时的游戏截图。 */
+  /** 场景载入、情境区、画面提示、违规倒计时、地雷爆炸、关卡结束六类事件是否附带当时的游戏截图。 */
   attachImages: boolean;
 }
 
@@ -81,7 +81,7 @@ export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
       'worlds.sisterdrive.attachImages': {
         type: 'boolean',
         title: '关键事件附截图',
-        description: '场景载入、情境区、画面提示、违规倒计时、关卡结束。',
+        description: '场景载入、情境区、画面提示、违规倒计时、地雷爆炸、关卡结束。',
         'x-hot': true,
       },
     },

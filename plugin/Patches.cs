@@ -173,4 +173,10 @@ namespace CorticoSisterDrive
             if (before != emotion) Plugin.Event("emotion", new JObject { ["from"] = before.ToString(), ["to"] = emotion.ToString() });
         }
     }
+
+    [HarmonyPatch(typeof(MineButtonPress), "ProcessPlayerCarExplosion")]
+    internal static class MinePatch
+    {
+        private static void Prefix() => Plugin.Event("mine", new JObject { ["state"] = Plugin.State() });
+    }
 }

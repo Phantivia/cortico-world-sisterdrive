@@ -30,6 +30,7 @@ Event types and their source:
 | `fine` | `ScoreStatus.AddFine` | `amount`, `total` |
 | `damage` | `ScoreStatus.AddDamageCount` | `count` |
 | `illegalAction` | `IllegalActionTimeoutUI.ShowIllegalActionTimeoutUI` when it was hidden | `timeLeftSec` |
+| `mine` | `MineButtonPress.ProcessPlayerCarExplosion` | `state` |
 | `emotion` | `EmotionStatus.SetEmotion` with a different value | `from`, `to` |
 | `stageEnd` | `UIManager.ShowGameOverUI` / `ShowMissionCompleteUI` when neither panel is shown | `result` (`fail`/`clear`), `state` |
 | `scene` | `SceneManager.sceneLoaded` (single mode) | `state` |

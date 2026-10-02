@@ -17,13 +17,13 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const RAW_REPLY_MAX_CHARS = 400;
 
 /** cfg.attachImages 打开时附截图的事件。 */
-const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'stageEnd']);
+const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'mine', 'stageEnd']);
 
 const EMOTION: Record<string, string> = { Smile: '平静', Angry: '生气', Anxious: '紧张' };
 
 const TRIGGER: Record<string, TriggerMode> = {
   turn: 'flush', line: 'debounce', mission: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
-  fine: 'debounce', damage: 'flush', illegalAction: 'preempt', emotion: 'debounce', stageEnd: 'flush',
+  fine: 'debounce', damage: 'flush', illegalAction: 'preempt', mine: 'preempt', emotion: 'debounce', stageEnd: 'flush',
   scene: 'flush', micInput: 'flush', rateLimited: 'flush', turnFailed: 'flush',
 };
 
@@ -69,6 +69,7 @@ export function renderEvent(f: GameFrame): string | null {
     case 'popup': return `${TAG} 弹窗：${str('text')}`;
     case 'fine': return `${TAG} 罚款 +${String(f.amount)}，累计 ${String(f.total)}`;
     case 'damage': return `${TAG} 碰撞，本关累计 ${String(f.count)} 次`;
+    case 'mine': return `${TAG} 车压到地雷，爆炸了\n${renderState(f.state)}`;
     case 'illegalAction': return `${TAG} 违规倒计时开始：${Number(f.timeLeftSec ?? 0).toFixed(1)} 秒`;
     case 'emotion': return `${TAG} 妹妹情绪 ${EMOTION[str('from')] ?? str('from')} → ${EMOTION[str('to')] ?? str('to')}`;
     case 'stageEnd': return `${TAG} 关卡结束：${f.result === 'clear' ? '通过' : '失败'}\n${renderState(f.state)}`;
