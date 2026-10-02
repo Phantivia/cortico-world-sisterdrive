@@ -76,7 +76,8 @@ namespace CorticoSisterDrive
             {
                 _nextPromptCheck = Time.unscaledTime + 1f;
                 var prompt = ModelRouter.Instance != null ? Traverse.Create(ModelRouter.Instance).Field<string>("_activePromptText").Value : null;
-                if (prompt != null && !ReferenceEquals(prompt, _briefedPrompt))
+                // The router reloads the same prompt as a new string on reconnects; compare by value.
+                if (prompt != null && !string.Equals(prompt, _briefedPrompt, StringComparison.Ordinal))
                 {
                     _briefedPrompt = prompt;
                     var brief = Brief();
