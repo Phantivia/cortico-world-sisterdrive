@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using Newtonsoft.Json.Linq;
@@ -29,11 +30,19 @@ namespace CorticoSisterDrive
         {
             _listener = new TcpListener(IPAddress.Loopback, port);
             _listener.Start();
+            NoInherit(_listener.Server);
             _acceptThread = new Thread(AcceptLoop) { IsBackground = true, Name = "cortico-sisterdrive-accept" };
             _acceptThread.Start();
         }
 
         public bool Connected => _writer != null;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
+
+        // The game starts a TTS sidecar process that inherits handles; an inherited listening
+        // socket keeps the port bound after the game exits and swallows the next connection.
+        private static void NoInherit(Socket socket) => SetHandleInformation(socket.Handle, 1 /* HANDLE_FLAG_INHERIT */, 0);
 
         private void AcceptLoop()
         {
@@ -43,6 +52,7 @@ namespace CorticoSisterDrive
                 try { client = _listener.AcceptTcpClient(); }
                 catch { if (_disposed) return; continue; }
                 client.NoDelay = true;
+                NoInherit(client.Client);
                 lock (_writeLock)
                 {
                     try { _client?.Close(); } catch { }

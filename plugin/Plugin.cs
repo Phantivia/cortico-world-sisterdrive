@@ -46,7 +46,7 @@ namespace CorticoSisterDrive
             Instance = this;
             Log = Logger;
             // The build pauses its player loop while unfocused; the bridge and the game must keep
-            // running while the operator works in other windows.
+            // running while the operator works in other windows. Update re-asserts it.
             Application.runInBackground = true;
             _port = Config.Bind("Bridge", "Port", 47631, "127.0.0.1 TCP port the Cortico World connects to.");
             _bridge = new Bridge(_port.Value);
@@ -65,6 +65,8 @@ namespace CorticoSisterDrive
 
         private void Update()
         {
+            // LoadingSceneManager turns it off when its loading jobs finish.
+            if (!Application.runInBackground) Application.runInBackground = true;
             while (_bridge.Inbox.TryDequeue(out var frame))
             {
                 try { Handle(frame); }
