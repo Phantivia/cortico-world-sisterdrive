@@ -14,6 +14,7 @@ namespace CorticoSisterDrive
         private static void Prefix(byte[] audioData)
         {
             Plugin.LastInputSource = Plugin.Injecting ? "world" : "mic";
+            Plugin.Unanswered.Enqueue(new System.Collections.Generic.KeyValuePair<string, long>(Plugin.LastInputSource, Plugin.Injecting ? Plugin.LastSayId : 0));
             if (!Plugin.Injecting)
                 Plugin.Event("micInput", new JObject { ["bytes"] = audioData?.Length ?? 0 });
         }
@@ -30,7 +31,13 @@ namespace CorticoSisterDrive
     {
         private static void Postfix(bool __result)
         {
-            if (__result) Plugin.Event("rateLimited", new JObject { ["source"] = Plugin.LastInputSource });
+            if (!__result) return;
+            // The input that hit the limit is dropped by the game and will get no turn.
+            var kept = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, long>>(Plugin.Unanswered);
+            if (kept.Count > 0) kept.RemoveAt(kept.Count - 1);
+            Plugin.Unanswered.Clear();
+            foreach (var k in kept) Plugin.Unanswered.Enqueue(k);
+            Plugin.Event("rateLimited", new JObject { ["source"] = Plugin.LastInputSource });
         }
     }
 

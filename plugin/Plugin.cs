@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
@@ -35,6 +36,11 @@ namespace CorticoSisterDrive
         internal static string LastInputSource;
         internal static string LastContext;
         internal static long LastSayId;
+        /// <summary>
+        /// Voice inputs handed to the game and not yet answered, oldest first: (source, say id).
+        /// The router answers them in order; a turn takes the oldest entry.
+        /// </summary>
+        internal static readonly System.Collections.Generic.Queue<KeyValuePair<string, long>> Unanswered = new System.Collections.Generic.Queue<KeyValuePair<string, long>>();
 
         private JObject _pendingTurn;
         private string _briefedPrompt;
@@ -127,10 +133,11 @@ namespace CorticoSisterDrive
         internal void OnTurnCommitted(LlmTurnResult result)
         {
             if (_pendingTurn != null) Emit(_pendingTurn);
+            var input = Unanswered.Count > 0 ? Unanswered.Dequeue() : new KeyValuePair<string, long>(LastInputSource, LastSayId);
             _pendingTurn = new JObject
             {
-                ["source"] = LastInputSource,
-                ["sayId"] = LastInputSource == "world" ? (JToken)LastSayId : null,
+                ["source"] = input.Key,
+                ["sayId"] = input.Key == "world" ? (JToken)input.Value : null,
                 ["heard"] = result?.UserTranscript,
                 ["reply"] = result?.Text,
                 ["latencySec"] = result?.LatencySeconds ?? 0f,
@@ -153,6 +160,7 @@ namespace CorticoSisterDrive
         {
             if (mode != LoadSceneMode.Single) return;
             _pendingTurn = null;
+            Unanswered.Clear(); // inputs from the previous scene get no turn here
             Event("scene", new JObject { ["state"] = State() });
         }
 
