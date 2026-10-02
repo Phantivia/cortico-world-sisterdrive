@@ -27,6 +27,8 @@ export interface SisterDriveConfigSection {
   topViewSpanMeters: number;
   /** 关卡中每隔多少秒缓存一份最新画面，随下一次唤醒一起送达；0 关闭。 */
   liveViewSec: number;
+  /** 关卡中超过这么多秒没对妹妹说话时，实时画面改为唤醒事件；每段空闲一次，0 关闭。 */
+  wakeIdleSec: number;
 }
 
 export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
@@ -43,6 +45,7 @@ export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
   topView: true,
   topViewSpanMeters: 60,
   liveViewSec: 3,
+  wakeIdleSec: 6,
 };
 
 export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
@@ -130,6 +133,15 @@ export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
         maximum: 60,
         title: '实时画面间隔',
         description: '关卡中按此间隔缓存最新画面，随下一次唤醒送达；0 关闭。',
+        'x-suffix': 's',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.wakeIdleSec': {
+        type: 'integer',
+        minimum: 0,
+        maximum: 120,
+        title: '空闲唤醒',
+        description: '关卡中这么久没对妹妹说话，就用实时画面唤醒一次；0 关闭。',
         'x-suffix': 's',
         'x-hot': true,
       },

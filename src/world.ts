@@ -129,6 +129,9 @@ export class SisterDriveWorld implements World {
   private liveDeliveredAtMs = 0;
   private liveQueued = false;
   private lastMineAtMs = 0;
+  /** 上一句 sisterdrive_say 被游戏收下的时刻；场景载入时重置。 */
+  private lastSayAtMs = Date.now();
+  private idleWokenAtMs = 0;
 
   constructor(private readonly opts: SisterDriveWorldOptions) {
     this.speech = new SpeechClient(opts.cfg);
@@ -200,7 +203,10 @@ export class SisterDriveWorld implements World {
   private async onGameEvent(f: GameFrame): Promise<void> {
     if (f.scene) this.scene = f.scene;
     if (f.state) this.voiceInput = f.state.voiceInput;
-    if (f.type === 'scene') this.live = null;
+    if (f.type === 'scene') {
+      this.live = null;
+      this.lastSayAtMs = Date.now();
+    }
     const text = renderEvent(f);
     if (!text || !f.type) return;
     const blobs = this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
@@ -255,7 +261,14 @@ export class SisterDriveWorld implements World {
       if (this.opts.cfg.liveViewSec > 0 && this.bridge.connected && this.voiceInput && this.host?.modelFacts.accepts('image/jpeg')) {
         const shot = await this.shoot(LIVE_VIEW_SIZE);
         this.live = { blobs: shot.blobs, state: shot.state, note: shot.text, atMs: Date.now() };
-        this.queueLive();
+        const wakeSec = this.opts.cfg.wakeIdleSec;
+        if (wakeSec > 0 && this.idleWokenAtMs !== this.lastSayAtMs && Date.now() - this.lastSayAtMs >= wakeSec * 1000) {
+          // 每段空闲只唤醒一次；下一句 sisterdrive_say 后重新计时。
+          this.idleWokenAtMs = this.lastSayAtMs;
+          this.queueLive('flush');
+        } else {
+          this.queueLive('piggyback');
+        }
       }
     } catch (err) {
       this.host?.log.warn('sisterdrive.live', String(err));
@@ -264,22 +277,25 @@ export class SisterDriveWorld implements World {
     }
   }
 
-  private queueLive(): void {
-    if (!this.host || this.liveQueued) return;
-    this.liveQueued = true;
+  private queueLive(trigger: 'piggyback' | 'flush'): void {
+    if (!this.host || (trigger === 'piggyback' && this.liveQueued)) return;
+    if (trigger === 'piggyback') this.liveQueued = true;
     this.host.pushDeferred({
       type: 'sisterdrive.view',
       senderKey: this.id,
       tags: ['snapshot'],
       render: () => {
-        this.liveQueued = false;
+        if (trigger === 'piggyback') this.liveQueued = false;
         const live = this.live;
         if (!live || live.atMs <= this.liveDeliveredAtMs) return null;
         this.liveDeliveredAtMs = live.atMs;
-        const age = ((Date.now() - live.atMs) / 1000).toFixed(1);
-        return { text: [`${TAG} 实时画面（${age} 秒前截取）：${renderState(live.state)}`, live.note].filter(Boolean).join('\n'), blobs: live.blobs };
+        const now = Date.now();
+        const age = ((now - live.atMs) / 1000).toFixed(1);
+        const idle = ((now - this.lastSayAtMs) / 1000).toFixed(0);
+        const head = `${TAG} 实时画面（${age} 秒前截取，距你上一句对妹妹说的话 ${idle} 秒）：${renderState(live.state)}`;
+        return { text: [head, live.note].filter(Boolean).join('\n'), blobs: live.blobs };
       },
-    }, { trigger: 'piggyback' });
+    }, { trigger });
   }
 
   private async push(noun: string, text: string, trigger: TriggerMode, internal = false, blobs?: BlobInput[]): Promise<void> {
@@ -345,6 +361,7 @@ export class SisterDriveWorld implements World {
     if (!rep.ok) {
       return { text: `未执行：${SAY_REFUSAL[rep.error ?? ''] ?? rep.error}。「${text}」没有送进游戏。`, failed: true };
     }
+    this.lastSayAtMs = Date.now();
     const lines = [`已送进游戏（第 ${String(rep.id)} 句）：「${text}」，语音 ${(speech.durationMs / 1000).toFixed(1)} 秒，合成用时 ${(synthMs / 1000).toFixed(1)} 秒。`];
     if (rep.previousTurnInFlight) lines.push('送达时游戏还在处理上一句。');
     return { text: lines.join('\n') };
