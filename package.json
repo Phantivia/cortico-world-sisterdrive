@@ -1,0 +1,40 @@
+{
+  "name": "cortico-world-sisterdrive",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cortico World for Teach my little sister how to drive: a BepInEx plugin turns game calls into events and feeds the bot's voice to the game",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "cortico"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 5,
+    "displayName": "教妹妹开车"
+  },
+  "files": [
+    "src",
+    "plugin/*.cs",
+    "plugin/*.csproj",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:plugin": "dotnet build plugin -c Release -o dist/plugin"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.1.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
