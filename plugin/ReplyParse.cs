@@ -38,4 +38,21 @@ namespace CorticoSisterDrive
             return reply.Substring(start, end - start).Trim(Trim);
         }
     }
+
+    /// <summary>
+    /// TutorialController reads the action with <c>action:\s*(\w+)</c>. Replies that wrap the name
+    /// (<c>{action: {start_engine}, ...}</c>) match nothing and the tutorial waits forever for the
+    /// engine; the braces around the name are removed before the game parses.
+    /// </summary>
+    [HarmonyPatch(typeof(TutorialController), "ParseLlmReply")]
+    internal static class TutorialReplyParsePatch
+    {
+        private static readonly System.Text.RegularExpressions.Regex Wrapped =
+            new System.Text.RegularExpressions.Regex(@"action\s*:\s*[\{\[""']\s*(\w+)\s*[\}\]""']");
+
+        private static void Prefix(ref string llmReply)
+        {
+            if (llmReply != null) llmReply = Wrapped.Replace(llmReply, "action: $1");
+        }
+    }
 }
