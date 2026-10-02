@@ -12,12 +12,14 @@ namespace CorticoSisterDrive
     /// only for the duration of that camera's render (beginCameraRendering → endCameraRendering),
     /// so the game's camera scripts keep reading and writing their own rotation unchanged.
     ///
-    /// Top view: a plugin-owned camera above the player car, heading up, rendered on demand
-    /// into a texture for screenshots; it never draws to the screen.
+    /// Top view: plugin-owned cameras above the player car, heading up. One draws the minimap in
+    /// the top-right corner of the screen; another renders on demand into a texture for screenshots.
     /// </summary>
     internal sealed class View
     {
         internal bool GlanceEnabled = true;
+        internal bool MinimapEnabled = true;
+        internal float MinimapSpanMeters = 60f;
 
         private const float EaseSec = 0.35f;
         private const float GlanceYawDeg = 65f;
@@ -29,6 +31,12 @@ namespace CorticoSisterDrive
         private Quaternion _savedRotation;
         private AudioSource _sisterVoice;
         private Camera _topCamera;
+        private static Camera _miniCamera;
+
+        // Minimap viewport: share of screen width, margin from the top-right corner.
+        private const float MinimapWidth = 0.22f;
+        private const float MinimapMargin = 0.015f;
+        private const float MinimapHeightMeters = 60f;
 
         internal View()
         {
@@ -45,6 +53,35 @@ namespace CorticoSisterDrive
             if (speaking) HoldGlance(AfterSpeechHoldSec);
             float target = GlanceEnabled && Time.unscaledTime < _holdUntil ? 1f : 0f;
             _weight = Mathf.MoveTowards(_weight, target, Time.unscaledDeltaTime / EaseSec);
+            TickMinimap();
+        }
+
+        /// <summary>On-screen top view in the top-right corner, following the player car heading up.</summary>
+        private void TickMinimap()
+        {
+            var player = MinimapEnabled ? GameObject.FindGameObjectWithTag("Player") : null;
+            if (player == null)
+            {
+                if (_miniCamera != null) _miniCamera.enabled = false;
+                return;
+            }
+            if (_miniCamera == null)
+            {
+                var go = new GameObject("CorticoMinimap") { hideFlags = HideFlags.HideAndDontSave };
+                Object.DontDestroyOnLoad(go);
+                _miniCamera = go.AddComponent<Camera>();
+                _miniCamera.orthographic = true;
+                _miniCamera.clearFlags = CameraClearFlags.Skybox;
+                _miniCamera.nearClipPlane = 0.3f;
+                _miniCamera.depth = 100;
+            }
+            _miniCamera.enabled = true;
+            float aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
+            float h = MinimapWidth * aspect;
+            _miniCamera.rect = new Rect(1f - MinimapWidth - MinimapMargin, 1f - h - MinimapMargin * aspect, MinimapWidth, h);
+            _miniCamera.orthographicSize = MinimapSpanMeters / 2f;
+            _miniCamera.farClipPlane = MinimapHeightMeters + 50f;
+            _miniCamera.transform.SetPositionAndRotation(player.transform.position + Vector3.up * MinimapHeightMeters, Quaternion.Euler(90f, player.transform.eulerAngles.y, 0f));
         }
 
         private bool SisterSpeaking()
@@ -60,7 +97,7 @@ namespace CorticoSisterDrive
             Camera best = null;
             foreach (var cam in Camera.allCameras)
             {
-                if (cam.targetTexture != null || !cam.isActiveAndEnabled) continue;
+                if (cam == _miniCamera || cam.targetTexture != null || !cam.isActiveAndEnabled) continue;
                 if (best == null || cam.depth > best.depth) best = cam;
             }
             return best;

@@ -160,6 +160,8 @@ namespace CorticoSisterDrive
                     break;
                 case "config":
                     _view.GlanceEnabled = (bool?)frame["glance"] ?? true;
+                    _view.MinimapEnabled = (bool?)frame["minimap"] ?? true;
+                    _view.MinimapSpanMeters = (float?)frame["minimapSpanM"] ?? 60f;
                     Reply(frame, true);
                     break;
                 case "say": Say(frame); break;

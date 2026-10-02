@@ -19,6 +19,8 @@ export interface SisterDriveConfigSection {
   attachImages: boolean;
   /** 妹妹说话、或送进游戏的话正在被听时，主视角转向妹妹。 */
   glanceAtSister: boolean;
+  /** 关卡中在游戏画面右上角显示俯视小地图，范围同 topViewSpanMeters；观众和截图都看得到。 */
+  minimap: boolean;
   /** 截图时另附车顶俯视图（车头朝上）。 */
   topView: boolean;
   /** 俯视图覆盖的边长，米。 */
@@ -37,6 +39,7 @@ export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
   captureWidth: 960,
   attachImages: true,
   glanceAtSister: true,
+  minimap: true,
   topView: true,
   topViewSpanMeters: 60,
   liveViewSec: 3,
@@ -99,6 +102,12 @@ export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
       'worlds.sisterdrive.glanceAtSister': {
         type: 'boolean',
         title: '说话时看向妹妹',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.minimap': {
+        type: 'boolean',
+        title: '右上角小地图',
+        description: '范围与俯视图相同。',
         'x-hot': true,
       },
       'worlds.sisterdrive.topView': {

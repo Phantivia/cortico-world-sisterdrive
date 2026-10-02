@@ -73,7 +73,30 @@ namespace CorticoSisterDrive
         private static void Prefix(GameObject ___GameOverUI, GameObject ___MissionCompleteUI)
         {
             if (___GameOverUI != null && !___GameOverUI.activeSelf && !___MissionCompleteUI.activeSelf)
-                Plugin.Event("stageEnd", new JObject { ["result"] = "fail", ["state"] = Plugin.State() });
+                Plugin.Event("stageEnd", Cause(new JObject { ["result"] = "fail", ["state"] = Plugin.State() }));
+        }
+
+        /// <summary>
+        /// Adds the class that called ShowGameOverUI (coroutine bodies resolve to their owner) and,
+        /// when that class keeps one, its gameOverReason string.
+        /// </summary>
+        private static JObject Cause(JObject body)
+        {
+            foreach (var frame in new System.Diagnostics.StackTrace().GetFrames() ?? new System.Diagnostics.StackFrame[0])
+            {
+                var type = frame.GetMethod()?.DeclaringType;
+                if (type == null || type.Assembly != typeof(UIManager).Assembly || type == typeof(UIManager)) continue;
+                while (type.Name.StartsWith("<") && type.DeclaringType != null) type = type.DeclaringType;
+                body["cause"] = type.Name;
+                var field = AccessTools.Field(type, "gameOverReason");
+                if (field != null && typeof(Component).IsAssignableFrom(type))
+                {
+                    var owner = Object.FindFirstObjectByType(type);
+                    if (owner != null) body["reason"] = field.GetValue(owner) as string;
+                }
+                break;
+            }
+            return body;
         }
     }
 
@@ -174,9 +197,15 @@ namespace CorticoSisterDrive
         }
     }
 
-    [HarmonyPatch(typeof(MineButtonPress), "ProcessPlayerCarExplosion")]
+    [HarmonyPatch(typeof(SLaneMineSceneController), nameof(SLaneMineSceneController.OnMineHit))]
     internal static class MinePatch
     {
-        private static void Prefix() => Plugin.Event("mine", new JObject { ["state"] = Plugin.State() });
+        private static void Prefix(int ___currentMineHits, out int __state) => __state = ___currentMineHits;
+
+        private static void Postfix(int __state, int ___currentMineHits, int ___maxMineHits)
+        {
+            if (___currentMineHits > __state)
+                Plugin.Event("mine", new JObject { ["hits"] = ___currentMineHits, ["maxHits"] = ___maxMineHits, ["state"] = Plugin.State() });
+        }
     }
 }

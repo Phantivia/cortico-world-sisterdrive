@@ -30,16 +30,16 @@ Event types and their source:
 | `fine` | `ScoreStatus.AddFine` | `amount`, `total` |
 | `damage` | `ScoreStatus.AddDamageCount` | `count` |
 | `illegalAction` | `IllegalActionTimeoutUI.ShowIllegalActionTimeoutUI` when it was hidden | `timeLeftSec` |
-| `mine` | `MineButtonPress.ProcessPlayerCarExplosion` | `state` |
+| `mine` | `SLaneMineSceneController.OnMineHit` when the hit count rises | `hits`, `maxHits`, `state` |
 | `emotion` | `EmotionStatus.SetEmotion` with a different value | `from`, `to` |
-| `stageEnd` | `UIManager.ShowGameOverUI` / `ShowMissionCompleteUI` when neither panel is shown | `result` (`fail`/`clear`), `state` |
+| `stageEnd` | `UIManager.ShowGameOverUI` / `ShowMissionCompleteUI` when neither panel is shown | `result` (`fail`/`clear`), `state`; on fail `cause` (class that called ShowGameOverUI) and `reason` (its `gameOverReason`, when it has one) |
 | `scene` | `SceneManager.sceneLoaded` (single mode) | `state` |
 
 ## World → Plugin
 
 | kind | fields | reply |
 |---|---|---|
-| `config` | `id`, `glance` (turn the gameplay camera toward the sister while she speaks or a sent line plays) | — |
+| `config` | `id`, `glance` (turn the gameplay camera left toward the sister while she speaks or a sent line plays), `minimap`, `minimapSpanM` (top-right on-screen top view) | — |
 | `say` | `id`, `wav` (base64 wav), `text` (logged only), `glanceSec` (how long the camera looks at the sister) | `previousTurnInFlight`; errors `noVoiceInput`, `inputDisabled`, `paused` |
 | `look` | `id`, `maxWidth`, `top`, `topWidth`, `topHeightM`, `topSpanM` | `jpeg` (base64), `width`, `height`, `state`; with `top`: `topJpeg` (orthographic, car heading up), `topSpanM` |
 | `stage` | `id`, `action`: `restart`/`next`/`menu`/`continue` | errors `notInStage`, `noSceneLoader`, `notInMainMenu` |

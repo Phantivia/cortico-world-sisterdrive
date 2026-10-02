@@ -52,12 +52,35 @@ export function renderState(s: GameState | undefined): string {
   return parts.join(' · ');
 }
 
+/** 判负原因：调用 ShowGameOverUI 的类与它记下的原因串，按游戏代码里的判定条件翻译。 */
+const FAIL_REASON: Record<string, string> = {
+  '차량이 심각한 손상을 입어 더 이상 운행할 수 없습니다.': '压雷次数到上限，车辆严重损坏',
+  '차량이 갇혀서 더 이상 진행할 수 없습니다.': '车辆侧翻或卡住超过 3 秒',
+};
+const FAIL_CAUSE: Record<string, string> = {
+  CarStuckDetector: '车辆侧翻或卡住超过 3 秒',
+  PlayerCarCollider: '妹妹已经生气时又撞上车辆或行人',
+  PlayerCarCollisionChecker: '发生碰撞',
+  TrafficCrossChecker: '红灯时驶入路口',
+  PenaltyCarCollision: '被违规后出现的惩罚车撞上',
+  ParkingLotRampCarCollision: '第 4 次碰撞，车辆损毁',
+  RoadTestCarCollision: '第 4 次碰撞，车辆损毁',
+  CliffFallDetector: '车从边缘掉落',
+};
+
+export function failCause(cause: string, reason: string): string {
+  if (reason) return FAIL_REASON[reason] ?? reason;
+  return FAIL_CAUSE[cause] ?? (cause ? `判负来源 ${cause}` : '');
+}
+
 export function renderEvent(f: GameFrame): string | null {
   const str = (k: string): string => (typeof f[k] === 'string' ? (f[k] as string) : '');
   switch (f.type) {
     case 'turn': {
       const head = f.source === 'world' ? `${TAG} 妹妹对 sisterdrive_say 第 ${String(f.sayId)} 句的回应` : `${TAG} 游戏麦克风那句语音的回应`;
-      const lines = [head, `游戏听成：「${str('heard') || '（无转写）'}」`];
+      // 游戏模型直接听音频，多数平台不回转写；空着就不列。
+      const lines = [head];
+      if (str('heard')) lines.push(`游戏听成：「${str('heard')}」`);
       if (str('line')) lines.push(`妹妹说：「${str('line')}」`);
       const raw = str('reply');
       if (raw) lines.push(`游戏模型原始回复：${raw.length > RAW_REPLY_MAX_CHARS ? `${raw.slice(0, RAW_REPLY_MAX_CHARS)}…` : raw}`);
@@ -72,10 +95,13 @@ export function renderEvent(f: GameFrame): string | null {
     case 'popup': return `${TAG} 弹窗：${str('text')}`;
     case 'fine': return `${TAG} 罚款 +${String(f.amount)}，累计 ${String(f.total)}`;
     case 'damage': return `${TAG} 碰撞，本关累计 ${String(f.count)} 次`;
-    case 'mine': return `${TAG} 车压到地雷，爆炸了\n${renderState(f.state)}`;
+    case 'mine': return `${TAG} 车压到地雷，第 ${String(f.hits)} 次（满 ${String(f.maxHits)} 次判负）\n${renderState(f.state)}`;
     case 'illegalAction': return `${TAG} 违规倒计时开始：${Number(f.timeLeftSec ?? 0).toFixed(1)} 秒`;
     case 'emotion': return `${TAG} 妹妹情绪 ${EMOTION[str('from')] ?? str('from')} → ${EMOTION[str('to')] ?? str('to')}`;
-    case 'stageEnd': return `${TAG} 关卡结束：${f.result === 'clear' ? '通过' : '失败'}\n${renderState(f.state)}`;
+    case 'stageEnd': {
+      const cause = f.result === 'clear' ? '' : failCause(str('cause'), str('reason'));
+      return `${TAG} 关卡结束：${f.result === 'clear' ? '通过' : '失败'}${cause ? `，${cause}` : ''}\n${renderState(f.state)}`;
+    }
     case 'scene': return `${TAG} 场景载入：${str('scene')}\n${renderState(f.state)}`;
     case 'micInput': return `${TAG} 游戏麦克风收到一段语音（不是 sisterdrive_say 送的），游戏照常交给妹妹的模型。`;
     case 'rateLimited': return `${TAG} 游戏的语音请求达到每分钟 30 次上限，这句语音被游戏丢弃。`;
@@ -212,7 +238,7 @@ export class SisterDriveWorld implements World {
   }
 
   private sendConfig(): void {
-    void this.bridge.request({ kind: 'config', glance: this.opts.cfg.glanceAtSister }, REQUEST_TIMEOUT_MS).catch(() => {});
+    void this.bridge.request({ kind: 'config', glance: this.opts.cfg.glanceAtSister, minimap: this.opts.cfg.minimap, minimapSpanM: this.opts.cfg.topViewSpanMeters }, REQUEST_TIMEOUT_MS).catch(() => {});
   }
 
   /**
