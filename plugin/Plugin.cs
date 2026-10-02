@@ -45,6 +45,9 @@ namespace CorticoSisterDrive
         {
             Instance = this;
             Log = Logger;
+            // The build pauses its player loop while unfocused; the bridge and the game must keep
+            // running while the operator works in other windows.
+            Application.runInBackground = true;
             _port = Config.Bind("Bridge", "Port", 47631, "127.0.0.1 TCP port the Cortico World connects to.");
             _bridge = new Bridge(_port.Value);
             _harmony = new Harmony("ai.cortico.sisterdrive");
