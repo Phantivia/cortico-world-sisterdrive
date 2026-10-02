@@ -81,7 +81,7 @@ namespace CorticoSisterDrive
             _miniCamera.rect = new Rect(1f - MinimapWidth - MinimapMargin, 1f - h - MinimapMargin * aspect, MinimapWidth, h);
             _miniCamera.orthographicSize = MinimapSpanMeters / 2f;
             _miniCamera.farClipPlane = MinimapHeightMeters + 50f;
-            _miniCamera.transform.SetPositionAndRotation(player.transform.position + Vector3.up * MinimapHeightMeters, Quaternion.Euler(90f, player.transform.eulerAngles.y, 0f));
+            _miniCamera.transform.SetPositionAndRotation(AheadOf(player.transform, MinimapSpanMeters) + Vector3.up * MinimapHeightMeters, Quaternion.Euler(90f, player.transform.eulerAngles.y, 0f));
         }
 
         private bool SisterSpeaking()
@@ -120,6 +120,13 @@ namespace CorticoSisterDrive
             _turned = null;
         }
 
+        /// <summary>View centre a quarter span ahead of the car, so the car sits in the lower quarter.</summary>
+        private static Vector3 AheadOf(Transform car, float spanMeters)
+        {
+            var forward = Vector3.ProjectOnPlane(car.forward, Vector3.up).normalized;
+            return car.position + forward * (spanMeters / 4f);
+        }
+
         /// <summary>Renders the top view into a new texture; null when there is no player car.</summary>
         internal Texture2D RenderTop(int width, float heightMeters, float spanMeters)
         {
@@ -138,7 +145,7 @@ namespace CorticoSisterDrive
             int height = width;
             var pos = player.transform.position;
             float yaw = player.transform.eulerAngles.y;
-            _topCamera.transform.SetPositionAndRotation(pos + Vector3.up * heightMeters, Quaternion.Euler(90f, yaw, 0f));
+            _topCamera.transform.SetPositionAndRotation(AheadOf(player.transform, spanMeters) + Vector3.up * heightMeters, Quaternion.Euler(90f, yaw, 0f));
             _topCamera.farClipPlane = heightMeters + 50f;
             _topCamera.orthographicSize = spanMeters / 2f;
             var rt = RenderTexture.GetTemporary(width, height, 24);

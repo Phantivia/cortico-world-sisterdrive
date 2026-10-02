@@ -37,6 +37,8 @@ namespace CorticoSisterDrive
         internal static long LastSayId;
 
         private JObject _pendingTurn;
+        private string _briefedPrompt;
+        private float _nextPromptCheck;
         private float _pendingTurnAt;
         // The reply line follows CommitAndReturn within the same async continuation; this window
         // only bounds how long a turn without a spoken line waits before going out alone.
@@ -70,6 +72,17 @@ namespace CorticoSisterDrive
             // LoadingSceneManager turns it off when its loading jobs finish.
             if (!Application.runInBackground) Application.runInBackground = true;
             _view.Tick();
+            if (Time.unscaledTime >= _nextPromptCheck)
+            {
+                _nextPromptCheck = Time.unscaledTime + 1f;
+                var prompt = ModelRouter.Instance != null ? Traverse.Create(ModelRouter.Instance).Field<string>("_activePromptText").Value : null;
+                if (prompt != null && !ReferenceEquals(prompt, _briefedPrompt))
+                {
+                    _briefedPrompt = prompt;
+                    var brief = Brief();
+                    if (brief != null) Event("brief", new JObject { ["text"] = brief });
+                }
+            }
             while (_bridge.Inbox.TryDequeue(out var frame))
             {
                 try { Handle(frame); }
@@ -261,6 +274,14 @@ namespace CorticoSisterDrive
                     menu.StartContinue();
                     break;
                 }
+                case "newgame":
+                {
+                    // Operator-only (the World tool does not offer it): New Game without the confirm panel, from the tutorial.
+                    var menu = UnityEngine.Object.FindFirstObjectByType<MainMenu>();
+                    if (menu == null) { Reply(req, false, "notInMainMenu"); return; }
+                    menu.StartGame();
+                    break;
+                }
                 default: Reply(req, false, "unknown action " + action); return;
             }
             Reply(req, true);
@@ -269,6 +290,58 @@ namespace CorticoSisterDrive
         // ---- state ----------------------------------------------------------------------
 
         private static readonly BindingFlags AnyInstance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        /// <summary>
+        /// The parking target (TriggerZone) relative to the car, with the quantities its completion
+        /// check uses: fully inside, rear-in heading within allowedAngleError, stay time.
+        /// </summary>
+        private static JObject Goal(Transform car)
+        {
+            foreach (var zone in UnityEngine.Object.FindObjectsByType<TriggerZone>(FindObjectsSortMode.None))
+            {
+                var t = Traverse.Create(zone);
+                if (t.Field<bool>("isCompleted").Value) continue;
+                var local = car.InverseTransformPoint(zone.transform.position);
+                var goal = new JObject
+                {
+                    ["distanceM"] = Math.Round(new Vector2(local.x, local.z).magnitude, 1),
+                    ["bearingDeg"] = Math.Round(Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg),
+                    ["inside"] = t.Field<bool>("isFullyInside").Value,
+                    ["stayedSec"] = Math.Round(t.Field<float>("currentStayTime").Value, 1),
+                    ["requiredStaySec"] = t.Field<float>("requiredStayTime").Value,
+                };
+                var reference = t.Field<Transform>("parkingDirectionReference").Value;
+                if (reference != null)
+                {
+                    goal["rearIn"] = true;
+                    goal["headingErrorDeg"] = Math.Round(180f - Vector3.Angle(car.forward, reference.forward));
+                    goal["allowedErrorDeg"] = t.Field<float>("allowedAngleError").Value;
+                }
+                return goal;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The parts of the sister model's active system prompt that state the stage goal and the
+        /// action scale (#Goal, ##target_speed, ##steering_angle, ##duration), verbatim.
+        /// </summary>
+        internal static string Brief()
+        {
+            if (ModelRouter.Instance == null) return null;
+            var prompt = Traverse.Create(ModelRouter.Instance).Field<string>("_activePromptText").Value;
+            if (string.IsNullOrEmpty(prompt)) return null;
+            var parts = new System.Collections.Generic.List<string>();
+            foreach (var header in new[] { "#Goal", "##target_speed", "##steering_angle", "##duration", "##horizontal_action", "##vertical_action" })
+            {
+                int at = prompt.IndexOf(header + "\n", StringComparison.Ordinal);
+                if (at < 0) at = prompt.IndexOf(header, StringComparison.Ordinal);
+                if (at < 0) continue;
+                int end = prompt.IndexOf("\n#", at + header.Length, StringComparison.Ordinal);
+                parts.Add((end < 0 ? prompt.Substring(at) : prompt.Substring(at, end - at)).Trim());
+            }
+            return parts.Count > 0 ? string.Join("\n", parts) : null;
+        }
 
         internal static JObject State()
         {
@@ -281,6 +354,7 @@ namespace CorticoSisterDrive
             var rb = player != null ? player.GetComponent<Rigidbody>() : null;
             // Same formula as the speedometer (VehicleStatusUI).
             if (rb != null) state["speed"] = Mathf.RoundToInt(rb.linearVelocity.magnitude * 4f);
+            if (player != null) { var goal = Goal(player.transform); if (goal != null) state["goal"] = goal; }
             if (EmotionStatus.Instance != null) state["emotion"] = EmotionStatus.Instance.GetEmotion().ToString();
             if (ScoreStatus.Instance != null)
             {

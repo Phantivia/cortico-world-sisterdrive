@@ -25,7 +25,7 @@ const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'm
 const EMOTION: Record<string, string> = { Smile: '平静', Angry: '生气', Anxious: '紧张' };
 
 const TRIGGER: Record<string, TriggerMode> = {
-  turn: 'flush', line: 'debounce', mission: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
+  turn: 'flush', line: 'debounce', mission: 'flush', brief: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
   fine: 'debounce', damage: 'flush', illegalAction: 'preempt', mine: 'preempt', emotion: 'debounce', stageEnd: 'flush',
   scene: 'flush', micInput: 'flush', rateLimited: 'flush', turnFailed: 'flush',
 };
@@ -49,7 +49,25 @@ export function renderState(s: GameState | undefined): string {
   if (s.fine !== undefined) parts.push(`罚款累计 ${s.fine}`);
   if (s.damageCount !== undefined) parts.push(`碰撞 ${s.damageCount} 次`);
   parts.push(s.paused ? '已暂停' : s.voiceInput ? '可接收语音' : '不接收语音');
-  return parts.join(' · ');
+  const goal = s.goal ? `\n${renderGoal(s.goal)}` : '';
+  return parts.join(' · ') + goal;
+}
+
+function bearingText(deg: number): string {
+  const a = Math.abs(deg);
+  if (a <= 10) return '正前方';
+  if (a >= 170) return '正后方';
+  return `${deg > 0 ? '右' : '左'}${a < 90 ? '前' : '后'}方（偏 ${a}°）`;
+}
+
+export function renderGoal(g: NonNullable<GameState['goal']>): string {
+  const parts = [`目标车位在车头${bearingText(g.bearingDeg)} ${g.distanceM} 米`];
+  if (g.rearIn && g.headingErrorDeg !== undefined) {
+    const ok = Math.abs(g.headingErrorDeg) <= (g.allowedErrorDeg ?? 0);
+    parts.push(`要求倒车入位（车尾朝里），车身与入位方向差 ${Math.abs(g.headingErrorDeg)}°，${ok ? '在允许范围内' : `允许 ${g.allowedErrorDeg}°`}`);
+  }
+  parts.push(g.inside ? `已完整进入车位，停稳满 ${g.requiredStaySec} 秒才算完成（已 ${g.stayedSec} 秒）` : '还没完整进入车位');
+  return parts.join('；');
 }
 
 /** 判负原因：调用 ShowGameOverUI 的类与它记下的原因串，按游戏代码里的判定条件翻译。 */
@@ -90,6 +108,7 @@ export function renderEvent(f: GameFrame): string | null {
     }
     case 'line': return `${TAG} 妹妹说：「${str('text')}」`;
     case 'mission': return `${TAG} 任务：${str('text')}`;
+    case 'brief': return `${TAG} 本关游戏给妹妹模型的说明（原文节选：目标与动作刻度）：\n${str('text')}`;
     case 'guide': return `${TAG} 画面提示：${str('text') || str('key')}`;
     case 'situation': return `${TAG} 进入情境区，游戏给妹妹模型的情境描述：${str('text')}`;
     case 'popup': return `${TAG} 弹窗：${str('text')}`;
@@ -237,7 +256,7 @@ export class SisterDriveWorld implements World {
     const blobs: BlobInput[] = [{ bytes: Buffer.from(rep.jpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive.jpg', fallbackText: `游戏画面 ${String(rep.width)}×${String(rep.height)}` }];
     let text = '';
     if (typeof rep.topJpeg === 'string') {
-      text = `第二张是车顶俯视图：车头朝上，边长约 ${String(rep.topSpanM)} 米。`;
+      text = `第二张是车顶俯视图：车头朝上，本车在图中下方四分之一处，边长约 ${String(rep.topSpanM)} 米。`;
       blobs.push({ bytes: Buffer.from(rep.topJpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive-top.jpg', fallbackText: '俯视图' });
     }
     return { blobs, state: rep.state, text };

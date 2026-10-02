@@ -17,6 +17,17 @@ export interface GameState {
   damageCount?: number;
   /** 当前关卡的 AIManager 会随语音一起发给游戏模型的情境文本。 */
   context?: string;
+  /** 停车目标：相对车头的方位（右为正）与距离，及游戏通关判定用到的量。 */
+  goal?: {
+    distanceM: number;
+    bearingDeg: number;
+    inside: boolean;
+    stayedSec: number;
+    requiredStaySec: number;
+    rearIn?: boolean;
+    headingErrorDeg?: number;
+    allowedErrorDeg?: number;
+  };
   contextError?: string;
 }
 
