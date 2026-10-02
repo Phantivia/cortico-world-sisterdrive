@@ -5,6 +5,8 @@ export interface SisterDriveConfigSection {
   enabled: boolean;
   /** 游戏内插件监听的 127.0.0.1 端口，与插件配置 BepInEx/config/ai.cortico.sisterdrive.cfg 一致。 */
   port: number;
+  /** 控制台「启动游戏」打开的 exe；指向 Steam 库外的备份，Steam 更新不会动它。 */
+  gameExe: string;
   /** 合成送进游戏那份语音的 TTS 服务地址（OpenAI 兼容 /v1/audio/speech）。 */
   ttsUrl: string;
   /** 参考音频，单声道 PCM16 wav；留空时服务端用默认音色。 */
@@ -34,6 +36,7 @@ export interface SisterDriveConfigSection {
 export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
   enabled: false,
   port: 47631,
+  gameExe: 'L:\\CorticoGames\\teach sister to drive Demo\\teach_sister_to_drive.exe',
   ttsUrl: 'http://127.0.0.1:8010',
   voiceFile: '',
   voiceText: '',
@@ -62,6 +65,13 @@ export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
         title: '插件端口',
         description: '须与游戏目录 BepInEx/config/ai.cortico.sisterdrive.cfg 的 Port 一致。',
         'x-hot': false,
+      },
+      'worlds.sisterdrive.gameExe': {
+        type: 'string',
+        title: '游戏程序',
+        description: '控制台「启动游戏」打开的 teach_sister_to_drive.exe。指向 Steam 库外装好插件的备份，Steam 更新不会覆盖它；Steam 客户端须在运行。',
+        'x-path': { kind: 'file' },
+        'x-hot': true,
       },
       'worlds.sisterdrive.ttsUrl': {
         type: 'string',

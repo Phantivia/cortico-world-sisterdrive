@@ -16,23 +16,27 @@
   "cortico": {
     "kind": "world",
     "api": 5,
-    "displayName": "教妹妹开车"
+    "displayName": "教妹妹开车",
+    "consoleClient": "dist/console.js"
   },
   "files": [
     "src",
+    "dist/console.js",
     "plugin/*.cs",
     "plugin/*.csproj",
     "docs",
     "README.md"
   ],
   "scripts": {
+    "build": "node scripts/build-console.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.console.json",
     "build:plugin": "dotnet build plugin -c Release -o dist/plugin"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "cortico": "^0.1.5",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

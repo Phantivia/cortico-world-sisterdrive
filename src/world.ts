@@ -3,6 +3,9 @@
  * sisterdrive_say 合成语音并交给游戏原有的语音入口（AIManager.SendAudio2LLM），
  * 之后的识别、妹妹模型、动作执行全部走游戏自己的流程。
  */
+import { execFile, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BlobInput, ToolCallContext, ToolDef, ToolOutcome, TriggerMode, World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
@@ -167,6 +170,17 @@ export function renderEvent(f: GameFrame, sayStartedAtMs?: number): string | nul
   }
 }
 
+/** 同名进程是否在运行；Steam 库里那份与备份同名，任一在跑都算。 */
+function gameRunning(exe: string): Promise<boolean> {
+  const name = basename(exe);
+  if (!name || process.platform !== 'win32') return Promise.resolve(false);
+  return new Promise((resolve) => {
+    execFile('tasklist', ['/FI', `IMAGENAME eq ${name}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (err, stdout) => {
+      resolve(!err && stdout.toLowerCase().includes(`"${name.toLowerCase()}"`));
+    });
+  });
+}
+
 export interface SisterDriveWorldOptions {
   cfg: SisterDriveConfigSection;
   timezone: string;
@@ -215,6 +229,12 @@ export class SisterDriveWorld implements World {
       lamps: [{ label: '游戏插件', state: this.lamp, hint: this.detail || undefined }],
       badges: [{ label: '场景', value: this.scene || '—' }],
       config: [SISTERDRIVE_CONFIG_GROUP],
+      panels: [{ id: 'game', title: '游戏', description: '启动游戏，查看游戏进程与插件连接。' }],
+      invoke: async (panel, method) => {
+        if (panel === 'game' && method === 'status') return this.gameStatus();
+        if (panel === 'game' && method === 'launch') return this.launchGame();
+        throw new Error(`未知面板方法: ${panel}.${method}`);
+      },
       promptDocs: [{
         key: 'worlds.sisterdrive.envPrompt',
         title: '教妹妹开车 · 环境提示词',
@@ -239,6 +259,29 @@ export class SisterDriveWorld implements World {
     this.bridge.close();
     this.host = null;
     this.lamp = 'offline';
+  }
+
+  // ---- 游戏进程 ---------------------------------------------------------------------
+
+  private async gameStatus(): Promise<{ exe: string; exists: boolean; running: boolean; connected: boolean }> {
+    const exe = this.opts.cfg.gameExe;
+    return { exe, exists: !!exe && existsSync(exe), running: await gameRunning(exe), connected: this.bridge.connected };
+  }
+
+  /** 以 exe 所在目录为工作目录启动，游戏进程不随 bot 退出。 */
+  private async launchGame(): Promise<{ ok: true }> {
+    const status = await this.gameStatus();
+    if (!status.exists) throw new Error(`找不到游戏程序 ${status.exe}`);
+    if (status.running) throw new Error('游戏已在运行');
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(status.exe, [], { cwd: dirname(status.exe), detached: true, stdio: 'ignore' });
+      child.once('error', reject);
+      child.once('spawn', () => {
+        child.unref();
+        resolve();
+      });
+    });
+    return { ok: true };
   }
 
   // ---- 游戏 → 事件 ------------------------------------------------------------------
