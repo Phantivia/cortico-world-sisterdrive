@@ -15,6 +15,9 @@ const TAG = '[教妹妹开车]';
 // 插件在游戏主线程处理请求；游戏主线程卡顿期间请求会排队。
 const REQUEST_TIMEOUT_MS = 10_000;
 const RAW_REPLY_MAX_CHARS = 400;
+/** 实时画面每次唤醒都会进上下文，尺寸比事件截图小。 */
+const LIVE_VIEW_SIZE = { width: 512, topWidth: 384 };
+const MINE_CHAIN_MS = 3000;
 
 /** cfg.attachImages 打开时附截图的事件。 */
 const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'mine', 'stageEnd']);
@@ -99,6 +102,7 @@ export class SisterDriveWorld implements World {
   private live: { blobs: BlobInput[]; state: GameState | undefined; note: string; atMs: number } | null = null;
   private liveDeliveredAtMs = 0;
   private liveQueued = false;
+  private lastMineAtMs = 0;
 
   constructor(private readonly opts: SisterDriveWorldOptions) {
     this.speech = new SpeechClient(opts.cfg);
@@ -174,7 +178,13 @@ export class SisterDriveWorld implements World {
     const text = renderEvent(f);
     if (!text || !f.type) return;
     const blobs = this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
-    await this.push(f.type, text, TRIGGER[f.type] ?? 'debounce', false, blobs);
+    let trigger = TRIGGER[f.type] ?? 'debounce';
+    if (f.type === 'mine') {
+      // 连环爆炸只让第一声打断在途轮次，其余照常记录、随下一次唤醒送达。
+      if (Date.now() - this.lastMineAtMs < MINE_CHAIN_MS) trigger = 'piggyback';
+      this.lastMineAtMs = Date.now();
+    }
+    await this.push(f.type, text, trigger, false, blobs);
   }
 
   private async capture(): Promise<BlobInput[] | undefined> {
@@ -188,9 +198,9 @@ export class SisterDriveWorld implements World {
   }
 
   /** 第一人称截图，cfg.topView 时另附俯视图。 */
-  private async shoot(): Promise<{ blobs: BlobInput[]; state: GameState | undefined; text: string }> {
+  private async shoot(size: { width: number; topWidth: number } = { width: this.opts.cfg.captureWidth, topWidth: 512 }): Promise<{ blobs: BlobInput[]; state: GameState | undefined; text: string }> {
     const cfg = this.opts.cfg;
-    const rep = await this.bridge.request({ kind: 'look', maxWidth: cfg.captureWidth, top: cfg.topView, topSpanM: cfg.topViewSpanMeters }, REQUEST_TIMEOUT_MS);
+    const rep = await this.bridge.request({ kind: 'look', maxWidth: size.width, top: cfg.topView, topWidth: size.topWidth, topSpanM: cfg.topViewSpanMeters }, REQUEST_TIMEOUT_MS);
     if (!rep.ok || typeof rep.jpeg !== 'string') throw new Error(rep.error ?? '插件没有返回画面');
     const blobs: BlobInput[] = [{ bytes: Buffer.from(rep.jpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive.jpg', fallbackText: `游戏画面 ${String(rep.width)}×${String(rep.height)}` }];
     let text = '';
@@ -217,7 +227,7 @@ export class SisterDriveWorld implements World {
   private async refreshLive(): Promise<void> {
     try {
       if (this.opts.cfg.liveViewSec > 0 && this.bridge.connected && this.voiceInput && this.host?.modelFacts.accepts('image/jpeg')) {
-        const shot = await this.shoot();
+        const shot = await this.shoot(LIVE_VIEW_SIZE);
         this.live = { blobs: shot.blobs, state: shot.state, note: shot.text, atMs: Date.now() };
         this.queueLive();
       }

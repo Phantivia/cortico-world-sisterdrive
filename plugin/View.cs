@@ -8,7 +8,7 @@ namespace CorticoSisterDrive
     /// Camera presentation the plugin adds on top of the game's own cameras.
     ///
     /// Glance: while the sister speaks, or while a line the World sent is being heard, the
-    /// gameplay camera turns toward her head and eases back afterwards. The turn is applied
+    /// gameplay camera turns level to the left (driver seat) and eases back afterwards. The turn is applied
     /// only for the duration of that camera's render (beginCameraRendering → endCameraRendering),
     /// so the game's camera scripts keep reading and writing their own rotation unchanged.
     ///
@@ -20,7 +20,7 @@ namespace CorticoSisterDrive
         internal bool GlanceEnabled = true;
 
         private const float EaseSec = 0.35f;
-        private const float GlanceWeight = 0.85f;
+        private const float GlanceYawDeg = 65f;
         private const float AfterSpeechHoldSec = 0.4f;
 
         private float _weight;
@@ -54,19 +54,6 @@ namespace CorticoSisterDrive
             return _sisterVoice != null && _sisterVoice.isPlaying;
         }
 
-        private static Transform SisterHead()
-        {
-            var sister = Object.FindFirstObjectByType<SisterAnimationController>();
-            if (sister == null) return null;
-            var animator = sister.animator;
-            if (animator != null && animator.isHuman)
-            {
-                var head = animator.GetBoneTransform(HumanBodyBones.Head);
-                if (head != null) return head;
-            }
-            return sister.transform;
-        }
-
         /// <summary>The camera drawing the player's view: enabled, on screen, highest depth.</summary>
         internal static Camera GameplayCamera()
         {
@@ -82,15 +69,11 @@ namespace CorticoSisterDrive
         private void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
             if (_weight <= 0f || cam != GameplayCamera()) return;
-            var head = SisterHead();
-            if (head == null) return;
-            var toHead = head.position - cam.transform.position;
-            if (toHead.sqrMagnitude < 0.01f) return;
-            var look = Quaternion.LookRotation(toHead, Vector3.up);
-            float eased = Mathf.SmoothStep(0f, 1f, _weight) * GlanceWeight;
+            float eased = Mathf.SmoothStep(0f, 1f, _weight);
             _turned = cam;
             _savedRotation = cam.transform.rotation;
-            cam.transform.rotation = Quaternion.Slerp(_savedRotation, look, eased);
+            // The sister sits in the driver seat to the left; a level turn keeps the pitch.
+            cam.transform.rotation = Quaternion.AngleAxis(-GlanceYawDeg * eased, Vector3.up) * _savedRotation;
         }
 
         private void OnEndCamera(ScriptableRenderContext ctx, Camera cam)
