@@ -218,7 +218,7 @@ namespace CorticoSisterDrive
             Plugin.Event("collision", new JObject
             {
                 ["object"] = objectName,
-                ["kind"] = sound == ___coneCollisionSound ? "cone" : "hard",
+                ["hit"] = sound == ___coneCollisionSound ? "cone" : "hard",
                 ["force"] = System.Math.Round(magnitude, 1),
                 ["state"] = Plugin.State(),
             });

@@ -114,7 +114,7 @@ export function renderEvent(f: GameFrame): string | null {
     case 'popup': return `${TAG} 弹窗：${str('text')}`;
     case 'fine': return `${TAG} 罚款 +${String(f.amount)}，累计 ${String(f.total)}`;
     case 'damage': return `${TAG} 碰撞，本关累计 ${String(f.count)} 次`;
-    case 'collision': return `${TAG} 车撞上了${f.kind === 'cone' ? '锥桶' : '障碍物'}「${str('object')}」，撞击力度 ${String(f.force)}\n${renderState(f.state)}`;
+    case 'collision': return `${TAG} 车撞上了${f.hit === 'cone' ? '锥桶' : '障碍物'}「${str('object')}」，撞击力度 ${String(f.force)}\n${renderState(f.state)}`;
     case 'mine': return `${TAG} 车压到地雷，第 ${String(f.hits)} 次（满 ${String(f.maxHits)} 次判负）\n${renderState(f.state)}`;
     case 'illegalAction': return `${TAG} 违规倒计时开始：${Number(f.timeLeftSec ?? 0).toFixed(1)} 秒`;
     case 'emotion': return `${TAG} 妹妹情绪 ${EMOTION[str('from')] ?? str('from')} → ${EMOTION[str('to')] ?? str('to')}`;
