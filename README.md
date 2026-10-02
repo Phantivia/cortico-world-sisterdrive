@@ -21,4 +21,5 @@ The game needs a microphone selected on first start. Pick a device that stays si
 
 - `sisterdrive_say(text)` synthesizes `text` with the configured TTS and reference voice and hands the wav to `AIManager.SendAudio2LLM`, the same entry the game's push-to-talk uses. Transcription, the sister model, her actions and her voice all stay the game's own.
 - Events: `turn` (what the game heard, the sister's line, the raw model reply, the model latency, the situation text sent with it), `line`, `mission`, `guide`, `situation`, `popup`, `fine`, `damage`, `illegalAction`, `emotion`, `stageEnd`, `scene`, `micInput`, `rateLimited`, `turnFailed`. Frame fields: [docs/protocol.md](docs/protocol.md).
+- The plugin replaces `DefaultAIManager.ParseLlmReply` (S-lane stages): the original cuts each field one character before the next label, so replies without a separator between fields produced no action. Replies with separators parse to the same values.
 - `sisterdrive_look` returns a screenshot and the current state; `sisterdrive_stage` restarts, advances, returns to the menu or continues.
