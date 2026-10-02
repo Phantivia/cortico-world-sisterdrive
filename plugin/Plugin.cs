@@ -36,11 +36,20 @@ namespace CorticoSisterDrive
         internal static string LastInputSource;
         internal static string LastContext;
         internal static long LastSayId;
+        internal sealed class VoiceInput
+        {
+            public string Source;
+            public long SayId;
+        }
+
+        /// <summary>Who supplied each recording, keyed by the wav array the game passes on to the router.</summary>
+        internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], VoiceInput> Inputs = new System.Runtime.CompilerServices.ConditionalWeakTable<byte[], VoiceInput>();
+
         /// <summary>
-        /// Voice inputs handed to the game and not yet answered, oldest first: (source, say id).
-        /// The router answers them in order; a turn takes the oldest entry.
+        /// Voice inputs the router took and has not answered, oldest first. The router answers
+        /// them in order; a turn takes the oldest entry, and an input the router gives up on is removed.
         /// </summary>
-        internal static readonly System.Collections.Generic.Queue<KeyValuePair<string, long>> Unanswered = new System.Collections.Generic.Queue<KeyValuePair<string, long>>();
+        internal static readonly List<VoiceInput> Unanswered = new List<VoiceInput>();
 
         private JObject _pendingTurn;
         private string _briefedPrompt;
@@ -78,6 +87,7 @@ namespace CorticoSisterDrive
             // LoadingSceneManager turns it off when its loading jobs finish.
             if (!Application.runInBackground) Application.runInBackground = true;
             _view.Tick();
+            ClipReaper.Sweep();
             if (Time.unscaledTime >= _nextPromptCheck)
             {
                 _nextPromptCheck = Time.unscaledTime + 1f;
@@ -133,13 +143,14 @@ namespace CorticoSisterDrive
         internal void OnTurnCommitted(LlmTurnResult result)
         {
             if (_pendingTurn != null) Emit(_pendingTurn);
-            var input = Unanswered.Count > 0 ? Unanswered.Dequeue() : new KeyValuePair<string, long>(LastInputSource, LastSayId);
+            var input = Unanswered.Count > 0 ? Unanswered[0] : new VoiceInput { Source = LastInputSource, SayId = LastSayId };
+            if (Unanswered.Count > 0) Unanswered.RemoveAt(0);
             string raw = result?.Text;
-            Plan.OnReply(result, input.Key == "world" ? input.Value : 0);
+            Plan.OnReply(result, input.Source == "world" ? input.SayId : 0);
             _pendingTurn = new JObject
             {
-                ["source"] = input.Key,
-                ["sayId"] = input.Key == "world" ? (JToken)input.Value : null,
+                ["source"] = input.Source,
+                ["sayId"] = input.Source == "world" ? (JToken)input.SayId : null,
                 ["heard"] = result?.UserTranscript,
                 ["reply"] = raw,
                 ["latencySec"] = result?.LatencySeconds ?? 0f,

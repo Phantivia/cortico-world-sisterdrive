@@ -14,9 +14,39 @@ namespace CorticoSisterDrive
         private static void Prefix(byte[] audioData)
         {
             Plugin.LastInputSource = Plugin.Injecting ? "world" : "mic";
-            Plugin.Unanswered.Enqueue(new System.Collections.Generic.KeyValuePair<string, long>(Plugin.LastInputSource, Plugin.Injecting ? Plugin.LastSayId : 0));
+            if (audioData != null)
+            {
+                Plugin.Inputs.Remove(audioData);
+                Plugin.Inputs.Add(audioData, new Plugin.VoiceInput { Source = Plugin.LastInputSource, SayId = Plugin.Injecting ? Plugin.LastSayId : 0 });
+            }
             if (!Plugin.Injecting)
                 Plugin.Event("micInput", new JObject { ["bytes"] = audioData?.Length ?? 0 });
+        }
+    }
+
+    /// <summary>
+    /// Inputs dropped before the router (input disabled, rate limit) never get here. The router
+    /// answers an input it took either through CommitAndReturn, whose text it returns, or with
+    /// null after its retries failed; a null answer removes that input from the unanswered list.
+    /// </summary>
+    [HarmonyPatch(typeof(ModelRouter), nameof(ModelRouter.SendAudioAsync))]
+    internal static class RouterInputPatch
+    {
+        private static void Prefix(byte[] wav, out Plugin.VoiceInput __state)
+        {
+            if (wav == null || !Plugin.Inputs.TryGetValue(wav, out __state))
+                __state = new Plugin.VoiceInput { Source = Plugin.LastInputSource, SayId = 0 };
+            Plugin.Unanswered.Add(__state);
+        }
+
+        private static void Postfix(ref Awaitable<string> __result, Plugin.VoiceInput __state) => __result = Track(__result, __state);
+
+        private static async Awaitable<string> Track(Awaitable<string> reply, Plugin.VoiceInput input)
+        {
+            string text = null;
+            try { text = await reply; }
+            finally { if (text == null) Plugin.Unanswered.Remove(input); }
+            return text;
         }
     }
 
@@ -32,11 +62,6 @@ namespace CorticoSisterDrive
         private static void Postfix(bool __result)
         {
             if (!__result) return;
-            // The input that hit the limit is dropped by the game and will get no turn.
-            var kept = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, long>>(Plugin.Unanswered);
-            if (kept.Count > 0) kept.RemoveAt(kept.Count - 1);
-            Plugin.Unanswered.Clear();
-            foreach (var k in kept) Plugin.Unanswered.Enqueue(k);
             Plugin.Event("rateLimited", new JObject { ["source"] = Plugin.LastInputSource });
         }
     }
