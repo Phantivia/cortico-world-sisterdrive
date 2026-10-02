@@ -20,13 +20,13 @@ const LIVE_VIEW_SIZE = { width: 512, topWidth: 384 };
 const MINE_CHAIN_MS = 3000;
 
 /** cfg.attachImages 打开时附截图的事件。 */
-const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'mine', 'stageEnd']);
+const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'mine', 'collision', 'stageEnd']);
 
 const EMOTION: Record<string, string> = { Smile: '平静', Angry: '生气', Anxious: '紧张' };
 
 const TRIGGER: Record<string, TriggerMode> = {
   turn: 'flush', line: 'debounce', mission: 'flush', brief: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
-  fine: 'debounce', damage: 'flush', illegalAction: 'preempt', mine: 'preempt', emotion: 'debounce', stageEnd: 'flush',
+  fine: 'debounce', damage: 'flush', collision: 'flush', illegalAction: 'preempt', mine: 'preempt', emotion: 'debounce', stageEnd: 'flush',
   scene: 'flush', micInput: 'flush', rateLimited: 'flush', turnFailed: 'flush',
 };
 
@@ -114,6 +114,7 @@ export function renderEvent(f: GameFrame): string | null {
     case 'popup': return `${TAG} 弹窗：${str('text')}`;
     case 'fine': return `${TAG} 罚款 +${String(f.amount)}，累计 ${String(f.total)}`;
     case 'damage': return `${TAG} 碰撞，本关累计 ${String(f.count)} 次`;
+    case 'collision': return `${TAG} 车撞上了${f.kind === 'cone' ? '锥桶' : '障碍物'}「${str('object')}」，撞击力度 ${String(f.force)}\n${renderState(f.state)}`;
     case 'mine': return `${TAG} 车压到地雷，第 ${String(f.hits)} 次（满 ${String(f.maxHits)} 次判负）\n${renderState(f.state)}`;
     case 'illegalAction': return `${TAG} 违规倒计时开始：${Number(f.timeLeftSec ?? 0).toFixed(1)} 秒`;
     case 'emotion': return `${TAG} 妹妹情绪 ${EMOTION[str('from')] ?? str('from')} → ${EMOTION[str('to')] ?? str('to')}`;

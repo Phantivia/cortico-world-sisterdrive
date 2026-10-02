@@ -208,4 +208,20 @@ namespace CorticoSisterDrive
                 Plugin.Event("mine", new JObject { ["hits"] = ___currentMineHits, ["maxHits"] = ___maxMineHits, ["state"] = Plugin.State() });
         }
     }
+
+    /// <summary>S-lane stages only play a sound on impact; nothing is scored or shown.</summary>
+    [HarmonyPatch(typeof(SLaneCarController), "PlayCollisionSound")]
+    internal static class SLaneCollisionPatch
+    {
+        private static void Prefix(string objectName, float magnitude, AudioClip ___coneCollisionSound, AudioClip sound)
+        {
+            Plugin.Event("collision", new JObject
+            {
+                ["object"] = objectName,
+                ["kind"] = sound == ___coneCollisionSound ? "cone" : "hard",
+                ["force"] = System.Math.Round(magnitude, 1),
+                ["state"] = Plugin.State(),
+            });
+        }
+    }
 }

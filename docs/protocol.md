@@ -31,6 +31,7 @@ Event types and their source:
 | `fine` | `ScoreStatus.AddFine` | `amount`, `total` |
 | `damage` | `ScoreStatus.AddDamageCount` | `count` |
 | `illegalAction` | `IllegalActionTimeoutUI.ShowIllegalActionTimeoutUI` when it was hidden | `timeLeftSec` |
+| `collision` | `SLaneCarController.PlayCollisionSound` (S-lane stages score nothing on impact) | `object`, `kind` (`cone`/`hard`), `force`, `state` |
 | `mine` | `SLaneMineSceneController.OnMineHit` when the hit count rises | `hits`, `maxHits`, `state` |
 | `emotion` | `EmotionStatus.SetEmotion` with a different value | `from`, `to` |
 | `stageEnd` | `UIManager.ShowGameOverUI` / `ShowMissionCompleteUI` when neither panel is shown | `result` (`fail`/`clear`), `state`; on fail `cause` (class that called ShowGameOverUI) and `reason` (its `gameOverReason`, when it has one) |
