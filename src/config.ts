@@ -17,6 +17,14 @@ export interface SisterDriveConfigSection {
   captureWidth: number;
   /** 场景载入、情境区、画面提示、违规倒计时、地雷爆炸、关卡结束六类事件是否附带当时的游戏截图。 */
   attachImages: boolean;
+  /** 妹妹说话、或送进游戏的话正在被听时，主视角转向妹妹。 */
+  glanceAtSister: boolean;
+  /** 截图时另附车顶俯视图（车头朝上）。 */
+  topView: boolean;
+  /** 俯视图覆盖的边长，米。 */
+  topViewSpanMeters: number;
+  /** 关卡中每隔多少秒缓存一份最新画面，随下一次唤醒一起送达；0 关闭。 */
+  liveViewSec: number;
 }
 
 export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
@@ -28,6 +36,10 @@ export const SISTERDRIVE_DEFAULTS: SisterDriveConfigSection = {
   ttsInferenceTimesteps: 10,
   captureWidth: 960,
   attachImages: true,
+  glanceAtSister: true,
+  topView: true,
+  topViewSpanMeters: 60,
+  liveViewSec: 3,
 };
 
 export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
@@ -82,6 +94,34 @@ export const SISTERDRIVE_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean',
         title: '关键事件附截图',
         description: '场景载入、情境区、画面提示、违规倒计时、地雷爆炸、关卡结束。',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.glanceAtSister': {
+        type: 'boolean',
+        title: '说话时看向妹妹',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.topView': {
+        type: 'boolean',
+        title: '附俯视图',
+        description: '车顶正上方，车头朝上。',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.topViewSpanMeters': {
+        type: 'integer',
+        minimum: 10,
+        maximum: 300,
+        title: '俯视图范围',
+        'x-suffix': 'm',
+        'x-hot': true,
+      },
+      'worlds.sisterdrive.liveViewSec': {
+        type: 'integer',
+        minimum: 0,
+        maximum: 60,
+        title: '实时画面间隔',
+        description: '关卡中按此间隔缓存最新画面，随下一次唤醒送达；0 关闭。',
+        'x-suffix': 's',
         'x-hot': true,
       },
     },

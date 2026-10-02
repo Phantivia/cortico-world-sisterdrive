@@ -94,6 +94,11 @@ export class SisterDriveWorld implements World {
   private lamp: 'offline' | 'loading' | 'online' | 'error' = 'offline';
   private detail = '';
   private scene = '';
+  private voiceInput = false;
+  private liveTimer: NodeJS.Timeout | null = null;
+  private live: { blobs: BlobInput[]; state: GameState | undefined; note: string; atMs: number } | null = null;
+  private liveDeliveredAtMs = 0;
+  private liveQueued = false;
 
   constructor(private readonly opts: SisterDriveWorldOptions) {
     this.speech = new SpeechClient(opts.cfg);
@@ -134,9 +139,12 @@ export class SisterDriveWorld implements World {
     this.lamp = 'loading';
     this.detail = '等待游戏';
     this.bridge.open(this.opts.cfg.port);
+    this.scheduleLive();
   }
 
   async stop(): Promise<void> {
+    if (this.liveTimer) clearTimeout(this.liveTimer);
+    this.liveTimer = null;
     this.bridge.close();
     this.host = null;
     this.lamp = 'offline';
@@ -154,11 +162,15 @@ export class SisterDriveWorld implements World {
     this.lamp = 'online';
     this.detail = `插件 ${String(f.plugin)}`;
     this.scene = f.state?.scene ?? '';
+    this.voiceInput = f.state?.voiceInput ?? false;
+    this.sendConfig();
     await this.push('connection', `${TAG} 游戏已连接。\n${renderState(f.state)}`, 'flush', true);
   }
 
   private async onGameEvent(f: GameFrame): Promise<void> {
     if (f.scene) this.scene = f.scene;
+    if (f.state) this.voiceInput = f.state.voiceInput;
+    if (f.type === 'scene') this.live = null;
     const text = renderEvent(f);
     if (!text || !f.type) return;
     const blobs = this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
@@ -168,13 +180,70 @@ export class SisterDriveWorld implements World {
   private async capture(): Promise<BlobInput[] | undefined> {
     if (!this.host?.modelFacts.accepts('image/jpeg')) return undefined;
     try {
-      const rep = await this.bridge.request({ kind: 'look', maxWidth: this.opts.cfg.captureWidth }, REQUEST_TIMEOUT_MS);
-      if (!rep.ok || typeof rep.jpeg !== 'string') return undefined;
-      return [{ bytes: Buffer.from(rep.jpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive.jpg', fallbackText: '游戏画面' }];
+      return (await this.shoot()).blobs;
     } catch (err) {
       this.host?.log.warn('sisterdrive.capture', String(err));
       return undefined;
     }
+  }
+
+  /** 第一人称截图，cfg.topView 时另附俯视图。 */
+  private async shoot(): Promise<{ blobs: BlobInput[]; state: GameState | undefined; text: string }> {
+    const cfg = this.opts.cfg;
+    const rep = await this.bridge.request({ kind: 'look', maxWidth: cfg.captureWidth, top: cfg.topView, topSpanM: cfg.topViewSpanMeters }, REQUEST_TIMEOUT_MS);
+    if (!rep.ok || typeof rep.jpeg !== 'string') throw new Error(rep.error ?? '插件没有返回画面');
+    const blobs: BlobInput[] = [{ bytes: Buffer.from(rep.jpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive.jpg', fallbackText: `游戏画面 ${String(rep.width)}×${String(rep.height)}` }];
+    let text = '';
+    if (typeof rep.topJpeg === 'string') {
+      text = `第二张是车顶俯视图：车头朝上，边长约 ${String(rep.topSpanM)} 米。`;
+      blobs.push({ bytes: Buffer.from(rep.topJpeg, 'base64'), mime: 'image/jpeg', name: 'sisterdrive-top.jpg', fallbackText: '俯视图' });
+    }
+    return { blobs, state: rep.state, text };
+  }
+
+  private sendConfig(): void {
+    void this.bridge.request({ kind: 'config', glance: this.opts.cfg.glanceAtSister }, REQUEST_TIMEOUT_MS).catch(() => {});
+  }
+
+  /**
+   * 关卡中按 liveViewSec 缓存最新画面，用 piggyback 随行事件挂在下一次唤醒上；
+   * 投递时取最新的一份，比上次送达的新才出现。
+   */
+  private scheduleLive(): void {
+    const sec = this.opts.cfg.liveViewSec;
+    this.liveTimer = setTimeout(() => void this.refreshLive(), (sec > 0 ? sec : 5) * 1000);
+  }
+
+  private async refreshLive(): Promise<void> {
+    try {
+      if (this.opts.cfg.liveViewSec > 0 && this.bridge.connected && this.voiceInput && this.host?.modelFacts.accepts('image/jpeg')) {
+        const shot = await this.shoot();
+        this.live = { blobs: shot.blobs, state: shot.state, note: shot.text, atMs: Date.now() };
+        this.queueLive();
+      }
+    } catch (err) {
+      this.host?.log.warn('sisterdrive.live', String(err));
+    } finally {
+      if (this.host) this.scheduleLive();
+    }
+  }
+
+  private queueLive(): void {
+    if (!this.host || this.liveQueued) return;
+    this.liveQueued = true;
+    this.host.pushDeferred({
+      type: 'sisterdrive.view',
+      senderKey: this.id,
+      tags: ['snapshot'],
+      render: () => {
+        this.liveQueued = false;
+        const live = this.live;
+        if (!live || live.atMs <= this.liveDeliveredAtMs) return null;
+        this.liveDeliveredAtMs = live.atMs;
+        const age = ((Date.now() - live.atMs) / 1000).toFixed(1);
+        return { text: [`${TAG} 实时画面（${age} 秒前截取）：${renderState(live.state)}`, live.note].filter(Boolean).join('\n'), blobs: live.blobs };
+      },
+    }, { trigger: 'piggyback' });
   }
 
   private async push(noun: string, text: string, trigger: TriggerMode, internal = false, blobs?: BlobInput[]): Promise<void> {
@@ -232,7 +301,8 @@ export class SisterDriveWorld implements World {
     const synthMs = Date.now() - t0;
     let rep;
     try {
-      rep = await this.bridge.request({ kind: 'say', text, wav: speech.wav.toString('base64') }, REQUEST_TIMEOUT_MS);
+      this.sendConfig();
+      rep = await this.bridge.request({ kind: 'say', text, wav: speech.wav.toString('base64'), glanceSec: speech.durationMs / 1000 }, REQUEST_TIMEOUT_MS);
     } catch (err) {
       return { text: `结果未确认：${err instanceof Error ? err.message : String(err)}。音频已发出，游戏恢复后可能仍会处理「${text}」，是否处理以 sisterdrive.turn 为准。`, failed: true };
     }
@@ -253,14 +323,16 @@ export class SisterDriveWorld implements World {
       handler: async () => {
         const missing = this.requireGame();
         if (missing) return missing;
-        const rep = await this.bridge.request({ kind: 'look', maxWidth: this.opts.cfg.captureWidth }, REQUEST_TIMEOUT_MS);
-        if (!rep.ok) return { text: `未取得画面：${rep.error}`, failed: true };
-        const lines = [`${TAG} ${renderState(rep.state)}`];
-        if (rep.state?.context) lines.push(`妹妹模型此刻会收到的情境：${rep.state.context}`);
-        return {
-          text: lines.join('\n'),
-          blobs: [{ bytes: Buffer.from(String(rep.jpeg), 'base64'), mime: 'image/jpeg', name: 'sisterdrive.jpg', fallbackText: `游戏画面 ${String(rep.width)}×${String(rep.height)}` }],
-        };
+        let shot;
+        try {
+          shot = await this.shoot();
+        } catch (err) {
+          return { text: `未取得画面：${err instanceof Error ? err.message : String(err)}`, failed: true };
+        }
+        const lines = [`${TAG} ${renderState(shot.state)}`];
+        if (shot.text) lines.push(shot.text);
+        if (shot.state?.context) lines.push(`妹妹模型此刻会收到的情境：${shot.state.context}`);
+        return { text: lines.join('\n'), blobs: shot.blobs };
       },
     };
   }

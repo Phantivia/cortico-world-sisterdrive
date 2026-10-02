@@ -28,6 +28,7 @@ namespace CorticoSisterDrive
         private ConfigEntry<int> _port;
         private Bridge _bridge;
         private Harmony _harmony;
+        private View _view;
 
         /// <summary>True while SendAudio2LLM runs for audio the World supplied.</summary>
         internal static bool Injecting;
@@ -53,6 +54,7 @@ namespace CorticoSisterDrive
             _harmony = new Harmony("ai.cortico.sisterdrive");
             _harmony.PatchAll(typeof(Plugin).Assembly);
             int gated = TalkKey.Install(_harmony);
+            _view = new View();
             SceneManager.sceneLoaded += OnSceneLoaded;
             Log.LogInfo($"[sisterdrive] listening on 127.0.0.1:{_port.Value}; talk-key gates patched: {gated}");
         }
@@ -67,6 +69,7 @@ namespace CorticoSisterDrive
         {
             // LoadingSceneManager turns it off when its loading jobs finish.
             if (!Application.runInBackground) Application.runInBackground = true;
+            _view.Tick();
             while (_bridge.Inbox.TryDequeue(out var frame))
             {
                 try { Handle(frame); }
@@ -155,6 +158,10 @@ namespace CorticoSisterDrive
                         ["state"] = State(),
                     });
                     break;
+                case "config":
+                    _view.GlanceEnabled = (bool?)frame["glance"] ?? true;
+                    Reply(frame, true);
+                    break;
                 case "say": Say(frame); break;
                 case "look": StartCoroutine(Look(frame)); break;
                 case "stage": Stage(frame); break;
@@ -176,6 +183,7 @@ namespace CorticoSisterDrive
             Injecting = true;
             try { manager.SendAudio2LLM(wav); }
             finally { Injecting = false; }
+            _view.HoldGlance((float?)req["glanceSec"] ?? 0f);
             Reply(req, true, null, new JObject { ["previousTurnInFlight"] = inFlight });
         }
 
@@ -208,6 +216,16 @@ namespace CorticoSisterDrive
                 ["state"] = State(),
             };
             Destroy(scaled);
+            if ((bool?)req["top"] == true)
+            {
+                var top = _view.RenderTop((int?)req["topWidth"] ?? 512, (float?)req["topHeightM"] ?? 60f, (float?)req["topSpanM"] ?? 60f);
+                if (top != null)
+                {
+                    body["topJpeg"] = Convert.ToBase64String(top.EncodeToJPG(75));
+                    body["topSpanM"] = (float?)req["topSpanM"] ?? 60f;
+                    Destroy(top);
+                }
+            }
             Reply(req, true, null, body);
         }
 

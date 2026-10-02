@@ -39,8 +39,9 @@ Event types and their source:
 
 | kind | fields | reply |
 |---|---|---|
-| `say` | `id`, `wav` (base64 wav), `text` (logged only) | `previousTurnInFlight`; errors `noVoiceInput`, `inputDisabled`, `paused` |
-| `look` | `id`, `maxWidth` | `jpeg` (base64), `width`, `height`, `state` |
+| `config` | `id`, `glance` (turn the gameplay camera toward the sister while she speaks or a sent line plays) | — |
+| `say` | `id`, `wav` (base64 wav), `text` (logged only), `glanceSec` (how long the camera looks at the sister) | `previousTurnInFlight`; errors `noVoiceInput`, `inputDisabled`, `paused` |
+| `look` | `id`, `maxWidth`, `top`, `topWidth`, `topHeightM`, `topSpanM` | `jpeg` (base64), `width`, `height`, `state`; with `top`: `topJpeg` (orthographic, car heading up), `topSpanM` |
 | `stage` | `id`, `action`: `restart`/`next`/`menu`/`continue` | errors `notInStage`, `noSceneLoader`, `notInMainMenu` |
 
 Every `say` outside pause also counts as one release of the push-to-talk key (Space, axis `Recording`) for the stage scripts that wait for it (`TutorialController`, `CameraOverviewController`, `ParkingSceneGameManager`); `AIManager` still reads only the real key. A `say` that is accepted produces a `turn` (or `turnFailed`/`rateLimited`) whose `sayId` equals the request `id`.
