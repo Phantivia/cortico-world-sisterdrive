@@ -325,6 +325,9 @@ namespace CorticoSisterDrive
                 foreach (var hit in Physics.RaycastAll(origin, dir, range, ~0, QueryTriggerInteraction.Ignore))
                 {
                     if (hit.transform.IsChildOf(car) || hit.distance >= bestDist) continue;
+                    // Colliders on layers the car's colliders never collide with (the S-lane's
+                    // invisible lane walls) are not obstacles for this car.
+                    if (!CarCanHit(car, hit.collider.gameObject.layer)) continue;
                     // ground and road surfaces below the ray origin are not obstacles
                     if (Vector3.Dot(hit.normal, Vector3.up) > 0.8f) continue;
                     best = hit;
@@ -333,6 +336,14 @@ namespace CorticoSisterDrive
                 if (bestDist < float.MaxValue) result[name] = new JObject { ["distanceM"] = Math.Round(bestDist, 1), ["object"] = best.collider.name };
             }
             return result;
+        }
+
+        /// <summary>True when at least one solid collider of the car collides with <paramref name="layer"/> per the physics layer matrix.</summary>
+        private static bool CarCanHit(Transform car, int layer)
+        {
+            foreach (var c in car.GetComponentsInChildren<Collider>())
+                if (!c.isTrigger && !Physics.GetIgnoreLayerCollision(c.gameObject.layer, layer)) return true;
+            return false;
         }
 
         internal static JObject GoalOf(Transform car)
