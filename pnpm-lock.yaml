@@ -12,8 +12,8 @@ importers:
         specifier: ^22.10.0
         version: 22.20.4
       cortico:
-        specifier: ^0.1.4
-        version: 0.1.4
+        specifier: ^0.1.5
+        version: 0.1.5
       tsx:
         specifier: ^4.19.2
         version: 4.23.15
@@ -653,8 +653,8 @@ packages:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
-  cortico@0.1.4:
-    resolution: {integrity: sha512-+voEXnyM5kjBmelTn3zSAEAukf7o/5npdTNFPruT6Wp97rFiJcC/qVAi8f5NqtnnXmkrzTEU0VAy95TuOsijTQ==}
+  cortico@0.1.5:
+    resolution: {integrity: sha512-y7J5z+fcl3BEkKtKO4N5iQ8O8jTlHZrQ+LKJCJAARiQo8TR1eeeVzR1XFNlGlDCj1nYCDdfYwP5GHEtOCfcLjw==}
     engines: {node: '>=22'}
 
   csstype@3.2.3:
@@ -1572,7 +1572,7 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  cortico@0.1.4:
+  cortico@0.1.5:
     dependencies:
       '@types/express': 4.17.25
       '@types/react': 19.3.0
