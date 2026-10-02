@@ -134,12 +134,14 @@ namespace CorticoSisterDrive
         {
             if (_pendingTurn != null) Emit(_pendingTurn);
             var input = Unanswered.Count > 0 ? Unanswered.Dequeue() : new KeyValuePair<string, long>(LastInputSource, LastSayId);
+            string raw = result?.Text;
+            Plan.OnReply(result, input.Key == "world" ? input.Value : 0);
             _pendingTurn = new JObject
             {
                 ["source"] = input.Key,
                 ["sayId"] = input.Key == "world" ? (JToken)input.Value : null,
                 ["heard"] = result?.UserTranscript,
-                ["reply"] = result?.Text,
+                ["reply"] = raw,
                 ["latencySec"] = result?.LatencySeconds ?? 0f,
                 ["context"] = LastContext,
             };
@@ -305,7 +307,35 @@ namespace CorticoSisterDrive
         /// The parking target (TriggerZone) relative to the car, with the quantities its completion
         /// check uses: fully inside, rear-in heading within allowedAngleError, stay time.
         /// </summary>
-        private static JObject Goal(Transform car)
+        /// <summary>
+        /// Nearest collider straight ahead and 30 degrees to each side, from the car's front,
+        /// ignoring the car itself and trigger volumes. Distances in metres; absent when clear within range.
+        /// </summary>
+        private static JObject Ahead(Transform car)
+        {
+            const float range = 40f;
+            var result = new JObject();
+            var origin = car.position + Vector3.up * 0.6f;
+            var forward = Vector3.ProjectOnPlane(car.forward, Vector3.up).normalized;
+            foreach (var (name, yaw) in new[] { ("front", 0f), ("left", -30f), ("right", 30f) })
+            {
+                var dir = Quaternion.AngleAxis(yaw, Vector3.up) * forward;
+                RaycastHit best = default;
+                float bestDist = float.MaxValue;
+                foreach (var hit in Physics.RaycastAll(origin, dir, range, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.transform.IsChildOf(car) || hit.distance >= bestDist) continue;
+                    // ground and road surfaces below the ray origin are not obstacles
+                    if (Vector3.Dot(hit.normal, Vector3.up) > 0.8f) continue;
+                    best = hit;
+                    bestDist = hit.distance;
+                }
+                if (bestDist < float.MaxValue) result[name] = new JObject { ["distanceM"] = Math.Round(bestDist, 1), ["object"] = best.collider.name };
+            }
+            return result;
+        }
+
+        internal static JObject GoalOf(Transform car)
         {
             foreach (var zone in UnityEngine.Object.FindObjectsByType<TriggerZone>(FindObjectsSortMode.None))
             {
@@ -364,7 +394,12 @@ namespace CorticoSisterDrive
             var rb = player != null ? player.GetComponent<Rigidbody>() : null;
             // Same formula as the speedometer (VehicleStatusUI).
             if (rb != null) state["speed"] = Mathf.RoundToInt(rb.linearVelocity.magnitude * 4f);
-            if (player != null) { var goal = Goal(player.transform); if (goal != null) state["goal"] = goal; }
+            if (player != null)
+            {
+                var goal = GoalOf(player.transform);
+                if (goal != null) state["goal"] = goal;
+                state["ahead"] = Ahead(player.transform);
+            }
             if (EmotionStatus.Instance != null) state["emotion"] = EmotionStatus.Instance.GetEmotion().ToString();
             if (ScoreStatus.Instance != null)
             {

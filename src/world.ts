@@ -26,7 +26,7 @@ const IMAGE_EVENTS = new Set(['scene', 'situation', 'guide', 'illegalAction', 'm
 const EMOTION: Record<string, string> = { Smile: '平静', Angry: '生气', Anxious: '紧张' };
 
 const TRIGGER: Record<string, TriggerMode> = {
-  turn: 'flush', line: 'debounce', mission: 'flush', brief: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
+  turn: 'flush', plan: 'debounce', line: 'debounce', mission: 'flush', brief: 'flush', guide: 'flush', situation: 'flush', popup: 'flush',
   fine: 'debounce', damage: 'flush', collision: 'flush', illegalAction: 'preempt', mine: 'preempt', emotion: 'debounce', stageEnd: 'flush',
   scene: 'flush', micInput: 'flush', rateLimited: 'flush', turnFailed: 'flush',
 };
@@ -50,8 +50,32 @@ export function renderState(s: GameState | undefined): string {
   if (s.fine !== undefined) parts.push(`罚款累计 ${s.fine}`);
   if (s.damageCount !== undefined) parts.push(`碰撞 ${s.damageCount} 次`);
   parts.push(s.paused ? '已暂停' : s.voiceInput ? '可接收语音' : '不接收语音');
+  const ahead = s.ahead ? renderAhead(s) : '';
   const goal = s.goal ? `\n${renderGoal(s.goal)}` : '';
-  return parts.join(' · ') + goal;
+  return parts.join(' · ') + (ahead ? `\n${ahead}` : '') + goal;
+}
+
+const AHEAD_LABEL = { front: '正前', left: '左前 30°', right: '右前 30°' } as const;
+
+/** 射线距离，以及按当前车速走到那里的秒数（车速取自速度表，按其单位换算成米/秒）。 */
+export function renderAhead(s: GameState): string {
+  const mps = s.speed === undefined ? 0 : s.speedUnit === 'mph' ? s.speed * 0.447 : s.speed / 3.6;
+  const parts: string[] = [];
+  for (const key of ['front', 'left', 'right'] as const) {
+    const hit = s.ahead?.[key];
+    if (!hit) continue;
+    const eta = mps > 0.5 ? `，按当前车速约 ${(hit.distanceM / mps).toFixed(1)} 秒` : '';
+    parts.push(`${AHEAD_LABEL[key]} ${hit.distanceM} 米有「${hit.object}」${eta}`);
+  }
+  return parts.length ? `前方障碍：${parts.join('；')}` : '前方 40 米内三个方向都没有障碍';
+}
+
+function stepText(step: string): string {
+  return step
+    .replace(/speed none/, '速度不变').replace(/speed (-?[\d.]+)/, (_, v) => (Number(v) === 0 ? '刹车' : Number(v) < 0 ? `倒车 ${-Number(v)} km/h` : `速度 ${v} km/h`))
+    .replace(/steer none/, '方向不变').replace(/steer (-?[\d.]+)/, (_, v) => (Number(v) === 0 ? '回正' : `方向盘${Number(v) < 0 ? '左' : '右'}打 ${Math.abs(Number(v))}`))
+    .replace(/until none/, '一直保持').replace(/until seconds ([\d.]+)/, '保持 $1 秒').replace(/until distance ([\d.]+)/, '开出 $1 米')
+    .replace(/until turned ([\d.]+)/, '车头转过 $1°').replace(/until stopped/, '直到停稳').replace(/until goal ([\d.]+)/, '直到离目标不到 $1 米');
 }
 
 function bearingText(deg: number): string {
@@ -92,7 +116,8 @@ export function failCause(cause: string, reason: string): string {
   return FAIL_CAUSE[cause] ?? (cause ? `判负来源 ${cause}` : '');
 }
 
-export function renderEvent(f: GameFrame): string | null {
+/** sayStartedAtMs：这句 sisterdrive_say 开始调用的时刻，只对 turn 有用。 */
+export function renderEvent(f: GameFrame, sayStartedAtMs?: number): string | null {
   const str = (k: string): string => (typeof f[k] === 'string' ? (f[k] as string) : '');
   switch (f.type) {
     case 'turn': {
@@ -104,8 +129,19 @@ export function renderEvent(f: GameFrame): string | null {
       const raw = str('reply');
       if (raw) lines.push(`游戏模型原始回复：${raw.length > RAW_REPLY_MAX_CHARS ? `${raw.slice(0, RAW_REPLY_MAX_CHARS)}…` : raw}`);
       lines.push(`游戏模型用时 ${Number(f.latencySec ?? 0).toFixed(1)} 秒`);
+      if (sayStartedAtMs !== undefined) lines.push(`从你调用 sisterdrive_say 到她这句回应送达共 ${((Date.now() - sayStartedAtMs) / 1000).toFixed(1)} 秒（含合成、排队与游戏模型）`);
       if (str('context')) lines.push(`游戏随语音附给妹妹模型的情境：${str('context')}`);
       return lines.join('\n');
+    }
+    case 'plan': {
+      if (f.phase === 'started') {
+        const steps = Array.isArray(f.steps) ? (f.steps as string[]) : [];
+        return `${TAG} 妹妹按计划开（计划 ${String(f.planId)}，来自第 ${String(f.sayId)} 句）：\n${steps.map((s, i) => `${i + 1}. ${stepText(s)}`).join('\n')}`;
+      }
+      if (f.phase === 'step') return `${TAG} 计划 ${String(f.planId)} 第 ${String(f.index)}/${String(f.count)} 步：${stepText(str('step'))}`;
+      if (f.phase === 'done') return `${TAG} 计划 ${String(f.planId)} 走完了\n${renderState(f.state)}`;
+      if (f.phase === 'cancelled') return `${TAG} 计划 ${String(f.planId)} 被新的指令打断，没走完`;
+      return null;
     }
     case 'line': return `${TAG} 妹妹说：「${str('text')}」`;
     case 'mission': return `${TAG} 任务：${str('text')}`;
@@ -150,6 +186,7 @@ export class SisterDriveWorld implements World {
   private liveDeliveredAtMs = 0;
   private liveQueued = false;
   private readonly lastChainAtMs = new Map<string, number>();
+  private readonly sayStartedAtMs = new Map<number, number>();
   /** 上一句 sisterdrive_say 被游戏收下的时刻；场景载入时重置。 */
   private lastSayAtMs = Date.now();
   private idleWokenAtMs = 0;
@@ -228,7 +265,9 @@ export class SisterDriveWorld implements World {
       this.live = null;
       this.lastSayAtMs = Date.now();
     }
-    const text = renderEvent(f);
+    const sayId = typeof f.sayId === 'number' ? f.sayId : undefined;
+    const text = renderEvent(f, f.type === 'turn' && sayId !== undefined ? this.sayStartedAtMs.get(sayId) : undefined);
+    if (f.type === 'turn' && sayId !== undefined) this.sayStartedAtMs.delete(sayId);
     if (!text || !f.type) return;
     // 连环爆炸、连着蹭锥桶：只有第一下唤醒并附截图，其余照常记录、随下一次唤醒送达。
     let chained = false;
@@ -237,8 +276,10 @@ export class SisterDriveWorld implements World {
       chained = now - (this.lastChainAtMs.get(f.type) ?? 0) < CHAIN_MS;
       this.lastChainAtMs.set(f.type, now);
     }
-    const blobs = !chained && this.opts.cfg.attachImages && IMAGE_EVENTS.has(f.type) ? await this.capture() : undefined;
-    await this.push(f.type, text, chained ? 'piggyback' : TRIGGER[f.type] ?? 'debounce', false, blobs);
+    // 计划走完要接下一段：立即唤醒并附画面。
+    const planDone = f.type === 'plan' && f.phase === 'done';
+    const blobs = !chained && this.opts.cfg.attachImages && (IMAGE_EVENTS.has(f.type) || planDone) ? await this.capture() : undefined;
+    await this.push(f.type, text, chained ? 'piggyback' : planDone ? 'flush' : TRIGGER[f.type] ?? 'debounce', false, blobs);
   }
 
   private async capture(): Promise<BlobInput[] | undefined> {
@@ -384,6 +425,7 @@ export class SisterDriveWorld implements World {
       return { text: `未执行：${SAY_REFUSAL[rep.error ?? ''] ?? rep.error}。「${text}」没有送进游戏。`, failed: true };
     }
     this.lastSayAtMs = Date.now();
+    if (typeof rep.id === 'number') this.sayStartedAtMs.set(rep.id, t0);
     const lines = [`已送进游戏（第 ${String(rep.id)} 句）：「${text}」，语音 ${(speech.durationMs / 1000).toFixed(1)} 秒，合成用时 ${(synthMs / 1000).toFixed(1)} 秒。`];
     if (rep.previousTurnInFlight) lines.push('送达时游戏还在处理上一句。');
     return { text: lines.join('\n') };

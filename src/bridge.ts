@@ -17,6 +17,8 @@ export interface GameState {
   damageCount?: number;
   /** 当前关卡的 AIManager 会随语音一起发给游戏模型的情境文本。 */
   context?: string;
+  /** 车头正前、左前 30°、右前 30° 射线上最近的障碍物；某方向 40 米内没有就不出现。 */
+  ahead?: Partial<Record<'front' | 'left' | 'right', { distanceM: number; object: string }>>;
   /** 停车目标：相对车头的方位（右为正）与距离，及游戏通关判定用到的量。 */
   goal?: {
     distanceM: number;
