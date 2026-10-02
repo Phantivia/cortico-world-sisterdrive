@@ -12,7 +12,8 @@ import { SpeechClient } from './tts.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 const TAG = '[教妹妹开车]';
-const REQUEST_TIMEOUT_MS = 5000;
+// 插件在游戏主线程处理请求；游戏主线程卡顿期间请求会排队。
+const REQUEST_TIMEOUT_MS = 10_000;
 const RAW_REPLY_MAX_CHARS = 400;
 
 /** cfg.attachImages 打开时附截图的事件。 */
@@ -100,7 +101,7 @@ export class SisterDriveWorld implements World {
     this.bridge.on('disconnect', () => {
       this.lamp = 'loading';
       this.detail = '等待游戏';
-      void this.push('connection', `${TAG} 游戏连接已断开；游戏重新启动后自动重连。`, 'flush', true);
+      void this.push('connection', `${TAG} 游戏连接已断开，插件可连时自动重连。`, 'flush', true);
     });
   }
 
@@ -228,7 +229,12 @@ export class SisterDriveWorld implements World {
       return { text: `未执行：语音合成失败（${err instanceof Error ? err.message : String(err)}）。`, failed: true };
     }
     const synthMs = Date.now() - t0;
-    const rep = await this.bridge.request({ kind: 'say', text, wav: speech.wav.toString('base64') }, REQUEST_TIMEOUT_MS);
+    let rep;
+    try {
+      rep = await this.bridge.request({ kind: 'say', text, wav: speech.wav.toString('base64') }, REQUEST_TIMEOUT_MS);
+    } catch (err) {
+      return { text: `结果未确认：${err instanceof Error ? err.message : String(err)}。音频已发出，游戏恢复后可能仍会处理「${text}」，是否处理以 sisterdrive.turn 为准。`, failed: true };
+    }
     if (!rep.ok) {
       return { text: `未执行：${SAY_REFUSAL[rep.error ?? ''] ?? rep.error}。「${text}」没有送进游戏。`, failed: true };
     }

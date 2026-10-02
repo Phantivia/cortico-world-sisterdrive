@@ -63,7 +63,7 @@ export class GameBridge extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`游戏 ${String(payload.kind)} 请求 ${timeoutMs}ms 未回复`));
+        reject(new Error(`游戏 ${timeoutMs / 1000} 秒内没有处理 ${String(payload.kind)} 请求（游戏主线程未响应）`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       socket.write(`${JSON.stringify({ ...payload, id })}\n`);
