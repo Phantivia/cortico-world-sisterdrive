@@ -162,6 +162,7 @@ namespace CorticoSisterDrive
             switch ((string)frame["kind"])
             {
                 case "_connected":
+                    _briefedPrompt = null; // the new client gets the current brief within a second
                     _bridge.Send(new JObject
                     {
                         ["kind"] = "hello",
