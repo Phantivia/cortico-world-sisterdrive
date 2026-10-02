@@ -49,8 +49,9 @@ namespace CorticoSisterDrive
             _bridge = new Bridge(_port.Value);
             _harmony = new Harmony("ai.cortico.sisterdrive");
             _harmony.PatchAll(typeof(Plugin).Assembly);
+            int gated = TalkKey.Install(_harmony);
             SceneManager.sceneLoaded += OnSceneLoaded;
-            Log.LogInfo($"[sisterdrive] listening on 127.0.0.1:{_port.Value}");
+            Log.LogInfo($"[sisterdrive] listening on 127.0.0.1:{_port.Value}; talk-key gates patched: {gated}");
         }
 
         private void OnDestroy()
@@ -158,10 +159,12 @@ namespace CorticoSisterDrive
 
         private void Say(JObject req)
         {
+            if (GameStatus.Instance != null && GameStatus.Instance.IsPaused()) { Reply(req, false, "paused"); return; }
+            // Releasing the talk key happens whether or not the game takes the audio, as with the real key.
+            TalkKey.Release();
             var manager = AIManager.Instance;
             if (manager == null) { Reply(req, false, "noVoiceInput"); return; }
             if (!manager.InputAvailable) { Reply(req, false, "inputDisabled"); return; }
-            if (GameStatus.Instance != null && GameStatus.Instance.IsPaused()) { Reply(req, false, "paused"); return; }
             var wav = Convert.FromBase64String((string)req["wav"]);
             var inFlight = ModelRouter.Instance != null && Traverse.Create(ModelRouter.Instance).Field<bool>("_playInFlight").Value;
             LastSayId = (long)req["id"];

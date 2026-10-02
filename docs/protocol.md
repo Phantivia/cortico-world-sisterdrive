@@ -42,4 +42,4 @@ Event types and their source:
 | `look` | `id`, `maxWidth` | `jpeg` (base64), `width`, `height`, `state` |
 | `stage` | `id`, `action`: `restart`/`next`/`menu`/`continue` | errors `notInStage`, `noSceneLoader`, `notInMainMenu` |
 
-A `say` that is accepted produces a `turn` (or `turnFailed`/`rateLimited`) whose `sayId` equals the request `id`.
+Every `say` outside pause also counts as one release of the push-to-talk key (Space, axis `Recording`) for the stage scripts that wait for it (`TutorialController`, `CameraOverviewController`, `ParkingSceneGameManager`); `AIManager` still reads only the real key. A `say` that is accepted produces a `turn` (or `turnFailed`/`rateLimited`) whose `sayId` equals the request `id`.

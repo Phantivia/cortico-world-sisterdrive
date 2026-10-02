@@ -27,8 +27,8 @@ const TRIGGER: Record<string, TriggerMode> = {
 };
 
 const SAY_REFUSAL: Record<string, string> = {
-  noVoiceInput: '当前场景没有语音输入（菜单、加载或过场）',
-  inputDisabled: '游戏此刻关闭了语音输入（脚本演出中或关卡已结束）',
+  noVoiceInput: '当前场景没有语音输入（菜单、加载或过场），对讲键松开照常发出',
+  inputDisabled: '游戏此刻关闭了语音输入（脚本演出中或关卡已结束），对讲键松开照常发出，等这个键的开场画面会继续',
   paused: '游戏处于暂停',
 };
 
