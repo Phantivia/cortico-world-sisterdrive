@@ -1,5 +1,7 @@
 # cortico-world-sisterdrive
 
+> 此乃直播测试验证之后的world，和其他 Persona / 非直播场景的兼容性有待测试。
+
 Owner: `src/definition.ts`, `plugin/`.
 
 Cortico World for *Teach my little sister how to drive* (Steam, Unity Mono build). A BepInEx 5 plugin inside the game hooks the game's own methods with Harmony and serves them over `127.0.0.1` TCP; the World renders them as events and feeds the bot's voice to the game's voice-input entry.

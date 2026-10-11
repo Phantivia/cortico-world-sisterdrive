@@ -2,8 +2,13 @@
   "name": "cortico-world-sisterdrive",
   "version": "0.1.0",
   "type": "module",
-  "description": "Cortico World for Teach my little sister how to drive: a BepInEx plugin turns game calls into events and feeds the bot's voice to the game",
+  "description": "Cortico World for Teach my little sister how to drive: a BepInEx plugin turns game calls into events and feeds the bot's voice to the game. 此乃直播测试验证之后的world，和其他 Persona / 非直播场景的兼容性有待测试。",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Phantivia/cortico-world-sisterdrive.git"
+  },
+  "homepage": "https://github.com/Phantivia/cortico-world-sisterdrive#readme",
   "keywords": [
     "cortico-world",
     "cortico"
@@ -25,7 +30,8 @@
     "plugin/*.cs",
     "plugin/*.csproj",
     "docs",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node scripts/build-console.mjs",
