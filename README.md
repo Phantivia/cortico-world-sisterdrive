@@ -15,7 +15,7 @@ Cortico World for *Teach my little sister how to drive* (Steam, Unity Mono build
 
 Removing `winhttp.dll`, `doorstop_config.ini` and `BepInEx/` restores the unmodified game.
 
-A Steam update can overwrite the patched install. Copy the patched game directory outside the Steam library, add `steam_appid.txt` containing `3950270` next to the exe (Steamworks needs it outside Steam's own launch), and set `worlds.sisterdrive.gameExe` to that copy's exe. The World page's 游戏 panel (`pnpm build` produces its `dist/console.js`) starts that exe with Steam running and shows whether the game runs and the plugin is connected.
+A Steam update can overwrite the patched install. Copy the patched game directory outside the Steam library, add `steam_appid.txt` containing `3950270` next to the exe (Steamworks needs it outside Steam's own launch), and set `worlds.sisterdrive.gameExe` to that copy's exe. The World page's 游戏 panel (`pnpm build` produces its `dist/webui.js`) starts that exe with Steam running and shows whether the game runs and the plugin is connected.
 
 ## Game setup
 

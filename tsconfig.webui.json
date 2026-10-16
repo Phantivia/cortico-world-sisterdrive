@@ -1,0 +1,10 @@
+{
+  // WebUI 面板（src/webui/**）在浏览器里跑，单独带 DOM 检查（框架面板类型会连带引到 node 类型）；Node 侧的 tsconfig.json 不放 DOM。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["src/webui/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
