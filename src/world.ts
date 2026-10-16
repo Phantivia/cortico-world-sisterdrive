@@ -7,7 +7,7 @@ import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BlobInput, ToolCallContext, ToolDef, ToolOutcome, TriggerMode, World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
+import type { BlobInput, ToolCallContext, ToolDef, ToolOutcome, TriggerMode, World, WorldWebUiDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import { SISTERDRIVE_CONFIG_GROUP, type SisterDriveConfigSection } from './config.ts';
 import { GameBridge, PROTOCOL, type GameFrame, type GameState } from './bridge.ts';
@@ -181,6 +181,42 @@ function gameRunning(exe: string): Promise<boolean> {
   });
 }
 
+const SAY_TOOL: Omit<ToolDef, 'handler'> = {
+  name: 'sisterdrive_say',
+  description: 'Speak to the sister in the game: the text is synthesized in your voice and fed to the game as microphone input. Returns once the game accepted the audio; her reaction arrives later as a sisterdrive.turn event.',
+  tags: ['act'],
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      text: { type: 'string', description: 'The exact words addressed to the sister, as spoken in vtuber_act. Performance markers are removed before synthesis.' },
+    },
+    required: ['text'],
+  },
+};
+
+const LOOK_TOOL: Omit<ToolDef, 'handler'> = {
+  name: 'sisterdrive_look',
+  description: 'Current game screen plus scene, speed, sister emotion, fines, collisions, and the situation text the game would send to the sister model right now.',
+  tags: ['read', 'snapshot'],
+  parameters: { type: 'object', additionalProperties: false, properties: {} },
+};
+
+const STAGE_TOOL: Omit<ToolDef, 'handler'> = {
+  name: 'sisterdrive_stage',
+  description: 'Stage flow: restart = replay the current stage; next = load the next stage; menu = back to the main menu; continue = from the main menu, resume at the saved stage.',
+  tags: ['act'],
+  barrierAfter: true,
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { action: { type: 'string', enum: ['restart', 'next', 'menu', 'continue'] } },
+    required: ['action'],
+  },
+};
+
+export const SISTERDRIVE_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [SAY_TOOL, LOOK_TOOL, STAGE_TOOL];
+
 export interface SisterDriveWorldOptions {
   cfg: SisterDriveConfigSection;
   timezone: string;
@@ -224,7 +260,7 @@ export class SisterDriveWorld implements World {
     return [this.sayTool(), this.lookTool(), this.stageTool()];
   }
 
-  console(): WorldConsoleDecl {
+  webUi(): WorldWebUiDecl {
     return {
       lamps: [{ label: '游戏插件', state: this.lamp, hint: this.detail || undefined }],
       badges: [{ label: '场景', value: this.scene || '—' }],
@@ -429,17 +465,7 @@ export class SisterDriveWorld implements World {
 
   private sayTool(): ToolDef {
     return {
-      name: 'sisterdrive_say',
-      description: 'Speak to the sister in the game: the text is synthesized in your voice and fed to the game as microphone input. Returns once the game accepted the audio; her reaction arrives later as a sisterdrive.turn event.',
-      tags: ['act'],
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          text: { type: 'string', description: 'The exact words addressed to the sister, as spoken in vtuber_act. Performance markers are removed before synthesis.' },
-        },
-        required: ['text'],
-      },
+      ...SAY_TOOL,
       handler: async (args, ctx) => this.say(String(args.text ?? ''), ctx),
     };
   }
@@ -476,10 +502,7 @@ export class SisterDriveWorld implements World {
 
   private lookTool(): ToolDef {
     return {
-      name: 'sisterdrive_look',
-      description: 'Current game screen plus scene, speed, sister emotion, fines, collisions, and the situation text the game would send to the sister model right now.',
-      tags: ['read', 'snapshot'],
-      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      ...LOOK_TOOL,
       handler: async () => {
         const missing = this.requireGame();
         if (missing) return missing;
@@ -499,16 +522,7 @@ export class SisterDriveWorld implements World {
 
   private stageTool(): ToolDef {
     return {
-      name: 'sisterdrive_stage',
-      description: 'Stage flow: restart = replay the current stage; next = load the next stage; menu = back to the main menu; continue = from the main menu, resume at the saved stage.',
-      tags: ['act'],
-      barrierAfter: true,
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: { action: { type: 'string', enum: ['restart', 'next', 'menu', 'continue'] } },
-        required: ['action'],
-      },
+      ...STAGE_TOOL,
       handler: async (args) => {
         const missing = this.requireGame();
         if (missing) return missing;

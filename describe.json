@@ -1,0 +1,251 @@
+{
+  "tools": [
+    {
+      "name": "sisterdrive_say",
+      "description": "Speak to the sister in the game: the text is synthesized in your voice and fed to the game as microphone input. Returns once the game accepted the audio; her reaction arrives later as a sisterdrive.turn event.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The exact words addressed to the sister, as spoken in vtuber_act. Performance markers are removed before synthesis."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "tags": [
+        "act"
+      ],
+      "summary": {
+        "zh": "把 bot 对妹妹说的话合成为 bot 的语音，当作麦克风输入送进游戏。",
+        "en": "Speaks to the sister: the bot's words are synthesized in its voice and fed to the game as microphone input."
+      }
+    },
+    {
+      "name": "sisterdrive_look",
+      "description": "Current game screen plus scene, speed, sister emotion, fines, collisions, and the situation text the game would send to the sister model right now.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "tags": [
+        "read",
+        "snapshot"
+      ],
+      "summary": {
+        "zh": "截一张游戏画面，附场景、车速、妹妹情绪、罚款、碰撞次数和游戏此刻给妹妹模型的情境。",
+        "en": "Takes a screenshot of the game with the scene, speed, the sister's mood, fines, collision count and the situation the game would give the sister model now."
+      }
+    },
+    {
+      "name": "sisterdrive_stage",
+      "description": "Stage flow: restart = replay the current stage; next = load the next stage; menu = back to the main menu; continue = from the main menu, resume at the saved stage.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "restart",
+              "next",
+              "menu",
+              "continue"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "tags": [
+        "act"
+      ],
+      "summary": {
+        "zh": "重开本关、进下一关、回主菜单，或在主菜单继续存档的关卡。",
+        "en": "Restarts the stage, loads the next one, goes back to the main menu, or continues the saved stage from the main menu."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "sisterdrive.connection",
+      "description": {
+        "zh": "游戏插件连上（附当前状态）或断开。",
+        "en": "The game plugin connected (with the current state) or disconnected."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.view",
+      "description": {
+        "zh": "关卡中定时截的实时画面与车况，随下一次唤醒送达；bot 太久没对妹妹说话时单独唤醒一次。",
+        "en": "A periodic live screenshot with the car's state during a stage, delivered with the next wake-up; it wakes the bot once when the bot has not spoken to the sister for a while."
+      },
+      "tags": [
+        "snapshot"
+      ]
+    },
+    {
+      "type": "sisterdrive.scene",
+      "description": {
+        "zh": "载入了新场景。",
+        "en": "A new scene loaded."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.turn",
+      "description": {
+        "zh": "妹妹对一句语音的回应：游戏听成什么、她说的话、游戏模型的回复与用时。",
+        "en": "The sister's response to a voice line: what the game heard, what she said, and the game model's reply and latency."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.turnFailed",
+      "description": {
+        "zh": "游戏模型请求失败。",
+        "en": "The game model's request failed."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.rateLimited",
+      "description": {
+        "zh": "游戏的语音请求到了每分钟 30 次上限，这句被游戏丢弃。",
+        "en": "The game hit its limit of 30 voice requests a minute and dropped this line."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.micInput",
+      "description": {
+        "zh": "游戏麦克风收到一段不是 sisterdrive_say 送来的语音。",
+        "en": "The game microphone picked up speech that sisterdrive_say did not send."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.plan",
+      "description": {
+        "zh": "妹妹的驾驶计划开始、走到某一步、走完或被打断。",
+        "en": "The sister's driving plan started, reached a step, finished or was interrupted."
+      }
+    },
+    {
+      "type": "sisterdrive.line",
+      "description": {
+        "zh": "妹妹在回应之外说的一句话。",
+        "en": "A line the sister said outside a response."
+      },
+      "trigger": "debounce"
+    },
+    {
+      "type": "sisterdrive.emotion",
+      "description": {
+        "zh": "妹妹的情绪变了。",
+        "en": "The sister's mood changed."
+      },
+      "trigger": "debounce"
+    },
+    {
+      "type": "sisterdrive.mission",
+      "description": {
+        "zh": "游戏给出的任务。",
+        "en": "A mission the game set."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.brief",
+      "description": {
+        "zh": "本关游戏给妹妹模型的说明节选：目标与动作刻度。",
+        "en": "An excerpt of this stage's instructions to the sister model: the goal and action scale."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.guide",
+      "description": {
+        "zh": "画面上的提示。",
+        "en": "An on-screen hint."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.situation",
+      "description": {
+        "zh": "车进入情境区，附游戏给妹妹模型的情境描述。",
+        "en": "The car entered a situation zone, with the game's situation text for the sister model."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.popup",
+      "description": {
+        "zh": "游戏弹窗。",
+        "en": "A game popup."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.fine",
+      "description": {
+        "zh": "罚款增加，附累计。",
+        "en": "A fine was added, with the running total."
+      },
+      "trigger": "debounce"
+    },
+    {
+      "type": "sisterdrive.damage",
+      "description": {
+        "zh": "碰撞计数加一，附本关累计。",
+        "en": "The collision count went up, with this stage's total."
+      },
+      "trigger": "flush"
+    },
+    {
+      "type": "sisterdrive.collision",
+      "description": {
+        "zh": "车撞上锥桶或障碍物；3 秒内连着撞只有第一下唤醒。",
+        "en": "The car hit a cone or an obstacle; within 3 seconds only the first hit wakes the bot."
+      }
+    },
+    {
+      "type": "sisterdrive.mine",
+      "description": {
+        "zh": "车压到地雷；3 秒内连着压只有第一下唤醒。",
+        "en": "The car hit a mine; within 3 seconds only the first hit wakes the bot."
+      }
+    },
+    {
+      "type": "sisterdrive.illegalAction",
+      "description": {
+        "zh": "违规倒计时开始。",
+        "en": "A violation countdown started."
+      },
+      "trigger": "preempt"
+    },
+    {
+      "type": "sisterdrive.stageEnd",
+      "description": {
+        "zh": "关卡结束：通过，或失败及原因。",
+        "en": "The stage ended: cleared, or failed with the cause."
+      },
+      "trigger": "flush"
+    }
+  ],
+  "prompts": [
+    {
+      "key": "worlds.sisterdrive.envPrompt",
+      "title": "教妹妹开车 · 环境提示词",
+      "role": "envPrompt",
+      "content": "你在玩《教妹妹开车》：妹妹握方向盘，你坐副驾驶，只能靠说话教她开。游戏里的妹妹由游戏自己的模型扮演，她只听得到 sisterdrive_say 送进去的语音。\r\n\r\n对妹妹说话时，同一轮里先调用 vtuber_act，再调用 sisterdrive_say。vtuber_act 的台词开头就是对妹妹说的那句指令，sisterdrive_say 的 text 一字不差地填这一句；不送进游戏的话（回她的嘴、跟观众聊）放在这句后面。这样你开口的那一刻妹妹就听到了，观众听到的指令也就是妹妹听到的。只对观众说的话只走 vtuber_act，不调用 sisterdrive_say。\r\n\r\n妹妹是个会顶嘴、会闹脾气的人，和她说话就像真的坐在她旁边：接她的话，回应她的抱怨和得意，夸她、怼她、哄她。这个游戏的味道在副驾驶的急：她磨蹭、走神、开歪的时候，催她、嫌她慢、急得直嚷都可以。这些都说在指令后面。\r\n怎么下指令她才开得对：\r\n- 妹妹能听懂一小段带时机的计划，自己按顺序做：比如「慢慢往前开，开十米左右方向盘往右打，车头摆正就回正」「倒车两米然后停」。她会把这句话拆成几步，每一步做到你说的时机（开出几米、车头转过多少、过几秒、停稳、离车位不到几米）再换下一步，不用等你再开口。车不会自己停，刹车和回正也要写进计划或者另外喊。\r\n- 开口之前先想清楚：以最近一份可信的状态为准（最新的实时画面、俯视图、前方障碍距离和状态文字），把从这里到下一个能停稳、能看清的位置拆成一小段计划，每步一个动作、一个看得见的时机，最后停住或保持直行。一句话只说这一小段，几步就够，不要把整关一口气说完。\r\n- sisterdrive.plan 会告诉你她按什么步骤在开、开到第几步、什么时候走完；走完时会附上当下的画面唤醒你。计划走完、或者画面和你预想的不一样，就从最新状态再拆下一段。中途发现要撞，就直接喊「刹车」，新的一句会打断还没走完的计划。\r\n- 用她听得懂的说法：往前、慢点、刹车、倒车、方向盘往左打一点、方向盘往右打一点、回正、停，加上「开几米」「转过来」「停稳」这类时机。不要报角度和迈数。\r\n- 车速压在 10 mph 以下。状态里的前方障碍写着按当前车速几秒到，sisterdrive.turn 写着你这句从开口到她回应用了几秒，计划的时机要留出这段提前量。\r\n- 只说一个立刻要做的动作时，她照游戏原来的方式做：每关开始的 sisterdrive.brief 能看出是哪种。档位式（弯道关）里她每次听出「往前」就加一档（约 10 mph），所以单独说「往左转」「直走」「继续开」都会再加速；只想打方向说「方向盘往左打」，想减速只能说「刹车」（速度清零、方向盘回正）。数值式（停车、地雷、路考）里新的一句会打断上一句没做完的动作。\r\n\r\n一次 sisterdrive_say 是一次完整的语音输入。游戏模型直接听音频，把听到的话转成驾驶动作和妹妹的回话，通常不回文字转写。话越短，合成和送达越快。你一段时间没对妹妹开口时，实时画面会单独唤醒你一次，标着距你上一句过了几秒；车照你上一句开得正常就不用开口。\r\nsisterdrive_say 的回执表示游戏收下了音频。妹妹的反应随 sisterdrive.turn 到达：「妹妹说」是她的回话，原始回复里的动作（目标速度、方向盘角度、持续秒数，或前进、刹车、左右）就是她从你的话里听懂并要去做的事。动作和你说的不一致时，按需要换个说法再说。\r\n\r\n游戏里发生的事按发生那一刻送达：任务、画面提示、进入情境区、违规倒计时、碰撞（包括撞上锥桶、护栏）、压到地雷（带第几次和判负次数）、罚款、妹妹情绪变化、关卡结束（失败时带判负原因）、场景载入。部分事件附带当时的游戏画面；关卡进行中，每次唤醒还会带上一份最新的实时画面（sisterdrive.view），它就是当下的路况，有它时一般不用再调 sisterdrive_look。画面可能附第二张车顶俯视图，车头朝上，图里的左右就是车的左右；游戏画面右上角的小地图是同一个视角。情境区描述是游戏同时给妹妹模型看的那段文字。每关开始时 sisterdrive.brief 给出游戏写给妹妹模型的本关目标和动作刻度（速度单位、方向盘比例），她就是按这个把你的话换成动作的。停车关的状态里有目标车位相对车头的方位、距离和入位要求，比在画面里找车位准。需要看路况时用 sisterdrive_look。\r\n车不会等你：你思考和合成语音的时间里车照常在开。\r\n关卡结束后用 sisterdrive_stage 选择重玩、下一关或回主菜单；在主菜单用 continue 回到存档关卡。游戏每分钟最多处理 30 句语音。\r\n"
+    }
+  ]
+}

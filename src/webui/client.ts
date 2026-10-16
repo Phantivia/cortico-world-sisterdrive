@@ -2,7 +2,7 @@
  * 教妹妹开车 World 的面板 bundle：「游戏」面板显示配置的 exe 与进程、插件连接状态，
  * 并从这份 exe 启动游戏。浏览器侧只 import type 框架，数据面走 ctx.invoke。
  */
-import type { ConsoleClientBundle, ConsolePanelContext } from 'cortico/web/shared/client-panel.ts';
+import type { WebUiClientBundle, WebUiPanelContext } from 'cortico/web/shared/client-panel.ts';
 
 interface GameStatus {
   exe: string;
@@ -13,7 +13,7 @@ interface GameStatus {
 
 const POLL_MS = 3000;
 
-function mountGame(ctx: ConsolePanelContext): void {
+function mountGame(ctx: WebUiPanelContext): void {
   const { ui } = ctx;
   const card = ui.sheet({ title: '游戏', desc: '从「游戏程序」配置的 exe 启动；指向 Steam 库外的备份，Steam 更新不会覆盖插件。' });
   const pills = ui.rowbar();
@@ -58,7 +58,7 @@ function mountGame(ctx: ConsolePanelContext): void {
   ctx.interval(() => { void refresh(); }, POLL_MS);
 }
 
-const bundle: ConsoleClientBundle = {
+const bundle: WebUiClientBundle = {
   panels: {
     game: { mount: mountGame },
   },
